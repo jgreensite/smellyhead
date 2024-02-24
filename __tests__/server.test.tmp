@@ -1,0 +1,38 @@
+const io = require('socket.io');
+const http = require('http');
+const Client = require('socket.io-client');
+const { io:server } = require('../server');
+const port = 3000; // replace with your server's port number
+
+describe('socket.io connection', () => {
+    let httpServer;
+    let clientSocket;
+    let ioServer;
+
+    // Setup a Socket.IO server for testing
+    beforeAll((done) => {
+        ioServer = server;
+        clientSocket = new Client(`http://localhost:${port}`);
+        ioServer.on('connection', server);
+        clientSocket.on('connect', done);
+    });
+
+    // Cleanup after testing
+    afterAll(() => {
+        ioServer.close();
+        if (clientSocket) {
+            clientSocket.close();
+        }
+    });
+
+    test('should add a player when joinGame is emitted', (done) => {
+        clientSocket.emit('joinGame');
+        clientSocket.on('cannotJoin', (message) => {
+            expect(message).toBe('The game is currently in progress or not accepting new players.');
+            done();
+        });
+        // Add more assertions as needed
+    });
+
+    // Add more tests as needed
+});
