@@ -1,6 +1,8 @@
 const stateMachine = require('../src/stateMachine');
 const gameState = require('../src/gameState');
 const Deck = require('../src/deck');
+const Player = require('../src/player')
+const gameRules = require('../src/gameRules');
 
 beforeEach(() => {
     // Reset gameState before each test
@@ -52,10 +54,10 @@ describe('listPlayers', () => {
         const socketId2 = 'testSocketId2';
         stateMachine.waitingForPlayers.addPlayer(socketId1);
         stateMachine.waitingForPlayers.addPlayer(socketId2);
-        const players = stateMachine.waitingForPlayers.listPlayers();
-        expect(players).toHaveLength(2);
-        expect(players[0].socketId).toEqual(socketId1);
-        expect(players[1].socketId).toEqual(socketId2);
+                const players = stateMachine.waitingForPlayers.listPlayers();
+                expect(players).toHaveLength(2);
+                expect(players[0].socketId).toEqual(socketId1);
+                expect(players[1].socketId).toEqual(socketId2);
     });
 });
 
@@ -117,11 +119,58 @@ describe('initialize', () => {
         stateMachine.setupGame.initialize();
         expect(gameState.players[0].cardsFaceDown).toHaveLength(3);
         expect(gameState.players[0].cardsFaceUp).toHaveLength(3);
+        expect(gameState.players[0].hand).toHaveLength(3);
         expect(gameState.players[1].cardsFaceDown).toHaveLength(3);
         expect(gameState.players[1].cardsFaceUp).toHaveLength(3);
-        expect(gameState.drawPile).toHaveLength(new Deck(1).cards.length - 12);
+        expect(gameState.players[1].hand).toHaveLength(3);
+        expect(gameState.drawPile).toHaveLength(new Deck(1).cards.length - 18);
         expect(gameState.discardPile).toHaveLength(0);
         expect(gameState.graveyardPile).toHaveLength(0);
+    });
+});
+
+describe('playCard', () => {
+    test('plays a card successfully', () => {
+        stateMachine.waitingForPlayers.addPlayer('socket1');
+        stateMachine.waitingForPlayers.addPlayer('socket2');
+        stateMachine.waitingForPlayers.startGame('socket1');
+        stateMachine.setupGame.initialize();
+        const player = gameState.players[0];
+        const card = player.hand[0];
+        stateMachine.gameInProgress.playCard(player, card);
+        expect(gameState.discardPile.includes(card)).toBe(true);
+        expect(gameState.discardPile).toHaveLength(1);
+        expect(player.hand.includes(card)).toBe(false);
+    });
+
+    test('does not play a card if it cannot be played', () => {
+        const socketId = 'testSocketId';
+        const card = { suit: 'hearts', value: '5' };
+        const topCard = { suit: 'clubs', value: '9' };
+        gameState.discardPile = [topCard];
+        stateMachine.waitingForPlayers.addPlayer(socketId);
+        const player = stateMachine.waitingForPlayers.getPlayer(socketId);
+        player.hand = [card];
+        stateMachine.gameInProgress.playCard(player, card);
+        expect(gameState.discardPile.includes(card)).toBe(false);
+        expect(gameState.discardPile).toHaveLength(0);
+        expect(player.hand.includes(topCard)).toBe(true);
+        expect(player.hand.includes(card)).toBe(true);
+        expect(player.hand).toHaveLength(2);
+    });
+
+    test('executes special card power if it exists', () => {
+        const socketId = 'testSocketId';
+        const card = { suit: 'hearts', value: 'Ace' };
+        const mockFunction = jest.fn();
+        gameRules.specialCardPowers[card.value] = mockFunction;
+
+        stateMachine.waitingForPlayers.addPlayer(socketId);
+        const player = stateMachine.waitingForPlayers.getPlayer(socketId);
+        player.hand = [card];
+        stateMachine.gameInProgress.playCard(player, card);
+
+        expect(mockFunction).toHaveBeenCalledWith(player);
     });
 });
 
@@ -140,5 +189,3 @@ describe('transition', () => {
         expect(gameState.currentState).toEqual('setupGame');
     });
 });
-
-

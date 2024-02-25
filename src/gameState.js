@@ -4,6 +4,7 @@ const gameState = {
     discardPile: [],
     graveyardPile: [],
     currentState: 'waitingForPlayers',
+    suit:''
 };
 
 module.exports = gameState;
