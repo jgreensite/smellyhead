@@ -3,7 +3,7 @@ const Player = require('./player');
 const Deck = require('./deck');
 const gameRules = require('./gameRules');
 
-const stateMachine = {
+const changeGameState = {
     waitingForPlayers: {
         addPlayer: function (socketId) {
             const playerExists = gameState.players.some(player => player.socketId === socketId);
@@ -25,8 +25,7 @@ const stateMachine = {
                 console.log(`Need at least ${minPlayersToStart} players to start the game.`);
                 return;
             }
-
-            stateMachine.transition('setupGame');
+            changeGameState.transition('setupGame');
         },
         removePlayer: function (socketId) {
             const playerIndex = gameState.players.findIndex(player => player.socketId === socketId);
@@ -69,12 +68,18 @@ const stateMachine = {
             gameState.discardPile = [];
             gameState.graveyardPile = [];
 
-            stateMachine.transition('gameInProgress');
+            // Set the direction of play, if a specific suit needs to be played, and the "higher than" value
+            gameState.direction = 1;
+            gameState.lowerthan = 1;
+            gameState.even = 1;
+            gameState.suit = '';
+
+            changeGameState.transition('gameInProgress');
         },
     },
 
     gameInProgress: {
-        playCard: function (player, card) {
+        prePlayCard: function (player, card) {
             // Check if the card can be played according to the game rules
             if (gameRules.canPlayCard(player, card)) {
 
@@ -83,42 +88,46 @@ const stateMachine = {
                 if (!card) {
                     throw new Error('Card is undefined');
                 }
-
-                // Check if the card has a special power and execute it
-                if (gameRules.specialCardPowers[card.value]) {
-                    gameRules.specialCardPowers[card.value](player);
-                }
-
                 // If the card can be played, add it to the discard pile and remove it from the player's hand
                 gameState.discardPile.push(card);
                 player.hand = player.hand.filter(c => c !== card);
-                
-                // After playing a card, the player draws a card from the draw pile
-                if (gameState.drawPile.length > 0) {
-                    const drawnCard = gameState.drawPile.pop();
-                    player.hand.push(drawnCard);
-                } else if (player.faceUpCards.length > 0) {
-                    // If the draw pile is empty, the player must play from their face-up cards
-                    // The player can choose which face-up card to play in their next turn
-                } else if (player.faceDownCards.length > 0) {
-                    // After using all face-up cards, the player can then use one of their face-down cards
-                    // The player can choose which face-down card to play
-                }
-            } else {
+            }  else {
                 // If the card cannot be played, the player must pick up the entire discard pile
                 player.hand.push(...gameState.discardPile);
                 gameState.discardPile = [];
             }
+            this.playCard(player,card);
+        },    
+        playCard: function(player,card){
+            this.postPlayCard(player, card);
         },
-        clearDiscardPile: function () {
-            // Move all cards from the discard pile to the graveyard pile
-            gameState.graveyardPile.push(...gameState.discardPile);
-            // Clear the discard pile
-            gameState.discardPile = [];
-        },
+        postPlayCard: function(player, card){
+            // The powers of the played cards are executed
+                if (gameRules.canPlayCard(player, card)) {
+
+                    //TODO - Remove this it is not needed
+                    // Check to ensure card is not undefined
+                    if (!card) {
+                        throw new Error('Card is undefined');
+                    }
+                
+                    // The player draws a card from the draw pile, if it has anything left in it and adds it to their hand
+                    if (gameState.drawPile.length > 0) {
+                        const drawnCard = gameState.drawPile.pop();
+                        player.hand.push(drawnCard);
+                    }
+                }
+            },
     },
     transition: function (newState) {
         gameState.currentState = newState;
     },
 };
-module.exports = stateMachine;
+
+function clearDiscardPile() {
+    // Move all cards from the discard pile to the graveyard pile
+    gameState.graveyardPile.push(...gameState.discardPile);
+    // Clear the discard pile
+    gameState.discardPile = [];
+};
+module.exports = {changeGameState, clearDiscardPile};

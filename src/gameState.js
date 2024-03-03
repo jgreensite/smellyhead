@@ -4,7 +4,10 @@ const gameState = {
     discardPile: [],
     graveyardPile: [],
     currentState: 'waitingForPlayers',
-    suit:''
+    suit:'',
+    lowerthan:false,
+    direction:1,
+    even:false
 };
 
 module.exports = gameState;
