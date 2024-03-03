@@ -4,6 +4,9 @@ const Deck = require('./deck');
 const gameRules = require('./gameRules');
 
 const changeGameState = {
+    start:{
+        //currently a placeholder for anything we want to set-up prior to waiting for players to join
+    },
     waitingForPlayers: {
         addPlayer: function (socketId) {
             const playerExists = gameState.players.some(player => player.socketId === socketId);
@@ -74,20 +77,20 @@ const changeGameState = {
             gameState.even = 1;
             gameState.suit = '';
 
-            changeGameState.transition('gameInProgress');
+            changeGameState.transition('gameInProgress',false);
         },
     },
 
     gameInProgress: {
         prePlayCard: function (player, card) {
+            // Check if the player has the card in their hand
+            if (!player.hand.includes(card)) {
+                console.log('Player does not have the card in their hand.');
+                return;
+            }
             // Check if the card can be played according to the game rules
             if (gameRules.canPlayCard(player, card)) {
 
-                //TODO - Remove this it is not needed
-                // Check to ensure card is not undefined
-                if (!card) {
-                    throw new Error('Card is undefined');
-                }
                 // If the card can be played, add it to the discard pile and remove it from the player's hand
                 gameState.discardPile.push(card);
                 player.hand = player.hand.filter(c => c !== card);
@@ -104,13 +107,7 @@ const changeGameState = {
         postPlayCard: function(player, card){
             // The powers of the played cards are executed
                 if (gameRules.canPlayCard(player, card)) {
-
-                    //TODO - Remove this it is not needed
-                    // Check to ensure card is not undefined
-                    if (!card) {
-                        throw new Error('Card is undefined');
-                    }
-                
+               
                     // The player draws a card from the draw pile, if it has anything left in it and adds it to their hand
                     if (gameState.drawPile.length > 0) {
                         const drawnCard = gameState.drawPile.pop();
@@ -119,15 +116,38 @@ const changeGameState = {
                 }
             },
     },
-    transition: function (newState) {
-        gameState.currentState = newState;
+    transition: function (newState, shouldInitialize = true) {
+        if (isValidTransition(gameState.currentState, newState)) {
+            gameState.currentState = newState;
+            if (shouldInitialize && this[newState] && typeof this[newState].initialize === 'function') {
+                this[newState].initialize();
+            }
+        } else {
+            throw new Error(`Invalid transition from ${gameState.currentState} to ${newState}`);
+        }
     },
 };
 
 function clearDiscardPile() {
-    // Move all cards from the discard pile to the graveyard pile
+    // Check if the discard pile is not already empty
+    if (gameState.discardPile.length === 0) {
+        console.log('Discard pile is already empty.');
+        return;
+    }// Move all cards from the discard pile to the graveyard pile
     gameState.graveyardPile.push(...gameState.discardPile);
     // Clear the discard pile
     gameState.discardPile = [];
 };
+
+function isValidTransition(currentState, newState) {
+    const validTransitions = {
+        start: ['waitingForPlayers'],
+        waitingForPlayers: ['setupGame'],
+        setupGame: ['gameInProgress'],
+        gameInProgress: ['gameOver', 'setupGame'],
+    };
+
+    return validTransitions[currentState].includes(newState);
+}
+
 module.exports = {changeGameState, clearDiscardPile};

@@ -106,7 +106,7 @@ describe('startGame', () => {
         changeGameState.waitingForPlayers.addPlayer(socketId1);
         changeGameState.waitingForPlayers.addPlayer(socketId2);
         changeGameState.waitingForPlayers.startGame(socketId1);
-        expect(gameState.currentState).toEqual('setupGame');
+        expect(gameState.currentState).toEqual('gameInProgress');
     });
 });
 
@@ -116,7 +116,8 @@ describe('initialize', () => {
         const socketId2 = 'testSocketId2';
         changeGameState.waitingForPlayers.addPlayer(socketId1);
         changeGameState.waitingForPlayers.addPlayer(socketId2);
-        changeGameState.setupGame.initialize();
+        changeGameState.transition('setupGame');
+        expect(gameState.currentState).toEqual('gameInProgress');
         expect(gameState.players[0].cardsFaceDown).toHaveLength(3);
         expect(gameState.players[0].cardsFaceUp).toHaveLength(3);
         expect(gameState.players[0].hand).toHaveLength(3);
@@ -134,7 +135,6 @@ describe('playCard', () => {
         changeGameState.waitingForPlayers.addPlayer('socket1');
         changeGameState.waitingForPlayers.addPlayer('socket2');
         changeGameState.waitingForPlayers.startGame('socket1');
-        changeGameState.setupGame.initialize();
         const player = gameState.players[0];
         const card = player.hand[0];
         changeGameState.gameInProgress.prePlayCard(player, card);
@@ -160,6 +160,34 @@ describe('playCard', () => {
     });
 });
 
+describe('prePlayCard', () => {
+    test('does not play a card if the player does not have it', () => {
+        const socketId = 'testSocketId';
+        const card = { suit: 'hearts', value: '5' };
+        changeGameState.waitingForPlayers.addPlayer(socketId);
+        const player = changeGameState.waitingForPlayers.getPlayer(socketId);
+        player.hand = [];
+        changeGameState.gameInProgress.prePlayCard(player, card);
+        expect(gameState.discardPile.includes(card)).toBe(false);
+        expect(player.hand.includes(card)).toBe(false);
+    });
+});
+
+describe('postPlayCard', () => {
+    test('handles an empty draw pile correctly', () => {
+        const socketId = 'testSocketId';
+        const card = { suit: 'hearts', value: '5' };
+        changeGameState.waitingForPlayers.addPlayer(socketId);
+        const player = changeGameState.waitingForPlayers.getPlayer(socketId);
+        player.hand = [card];
+        gameState.drawPile = [];
+        changeGameState.gameInProgress.postPlayCard(player, card);
+        expect(player.hand.includes(card)).toBe(true);
+        expect(player.hand).toHaveLength(1);
+        expect(gameState.drawPile).toHaveLength(0);
+    });
+});
+
 describe('clearDiscardPile', () => {
     test('clears the discard pile correctly', () => {
         gameState.discardPile = [{ suit: 'hearts', value: 'A' }, { suit: 'clubs', value: 'K' }];
@@ -169,9 +197,28 @@ describe('clearDiscardPile', () => {
     });
 });
 
+describe('clearDiscardPile', () => {
+    test('handles an empty discard pile correctly', () => {
+        gameState.discardPile = [];
+        gameState.graveyardPile = [];
+        clearDiscardPile();
+        expect(gameState.discardPile).toHaveLength(0);
+        expect(gameState.graveyardPile).toHaveLength(0);
+    });
+});
+
 describe('transition', () => {
     test('transitions to a new state', () => {
-        changeGameState.transition('setupGame');
-        expect(gameState.currentState).toEqual('setupGame');
+        gameState.currentState = 'start'
+        changeGameState.transition('waitingForPlayers');
+        expect(gameState.currentState).toEqual('waitingForPlayers');
+    });
+});
+
+describe('transition', () => {
+    test('does not transition to an invalid state', () => {
+        expect(() => {
+            changeGameState.transition('invalidState');
+        }).toThrow(Error);
     });
 });
