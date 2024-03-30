@@ -1,0 +1,16 @@
+body {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #f0f0f0;
+    color: #333;
+    text-align: center;
+}
+
+#gameArea {
+    margin: 20px auto;
+    white-space: pre-wrap;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+}
