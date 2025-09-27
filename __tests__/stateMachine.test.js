@@ -1,5 +1,5 @@
 const { changeGameState, clearDiscardPile } = require('../src/stateMachine');
-const gameState = require('../src/gameState');
+const { gameState } = require('../src/gameState');
 const Deck = require('../src/deck');
 const Player = require('../src/player')
 const gameRules = require('../src/gameRules');
@@ -8,6 +8,15 @@ beforeEach(() => {
     // Reset gameState before each test
     gameState.players = [];
     gameState.currentState = 'waitingForPlayers';
+    gameState.discardPile = [];
+    gameState.graveyardPile = [];
+    gameState.drawPile = [];
+    gameState.currentPlayerIndex = 0;
+    gameState.fastPlayActive = false;
+    gameState.even = null;
+    gameState.lowerthan = null;
+    gameState.suit = '';
+    gameState.direction = 1;
 });
 
 describe('addPlayer', () => {
@@ -118,11 +127,11 @@ describe('initialize', () => {
         changeGameState.waitingForPlayers.addPlayer(socketId2);
         changeGameState.transition('setupGame');
         expect(gameState.currentState).toEqual('gameInProgress');
-        expect(gameState.players[0].cardsFaceDown).toHaveLength(3);
-        expect(gameState.players[0].cardsFaceUp).toHaveLength(3);
+        expect(gameState.players[0].faceDownCards).toHaveLength(3);
+        expect(gameState.players[0].faceUpCards).toHaveLength(3);
         expect(gameState.players[0].hand).toHaveLength(3);
-        expect(gameState.players[1].cardsFaceDown).toHaveLength(3);
-        expect(gameState.players[1].cardsFaceUp).toHaveLength(3);
+        expect(gameState.players[1].faceDownCards).toHaveLength(3);
+        expect(gameState.players[1].faceUpCards).toHaveLength(3);
         expect(gameState.players[1].hand).toHaveLength(3);
         expect(gameState.drawPile).toHaveLength(new Deck(1).cards.length - 18);
         expect(gameState.discardPile).toHaveLength(0);
@@ -145,8 +154,8 @@ describe('playCard', () => {
 
     test('does not play a card if it cannot be played', () => {
         const socketId = 'testSocketId';
-        const card = { suit: 'hearts', value: '5' };
-        const topCard = { suit: 'clubs', value: '9' };
+        const card = { suit: 'hearts', value: '5', numericValue: 5 };
+        const topCard = { suit: 'clubs', value: '9', numericValue: 9 };
         gameState.discardPile = [topCard];
         changeGameState.waitingForPlayers.addPlayer(socketId);
         const player = changeGameState.waitingForPlayers.getPlayer(socketId);
@@ -156,14 +165,14 @@ describe('playCard', () => {
         expect(gameState.discardPile).toHaveLength(0);
         expect(player.hand.includes(topCard)).toBe(true);
         expect(player.hand.includes(card)).toBe(true);
-        expect(player.hand).toHaveLength(3);
+        expect(player.hand).toHaveLength(2); // original card + picked up card
     });
 });
 
 describe('prePlayCard', () => {
     test('does not play a card if the player does not have it', () => {
         const socketId = 'testSocketId';
-        const card = { suit: 'hearts', value: '5' };
+        const card = { suit: 'hearts', value: '5', numericValue: 5 };
         changeGameState.waitingForPlayers.addPlayer(socketId);
         const player = changeGameState.waitingForPlayers.getPlayer(socketId);
         player.hand = [];
@@ -176,7 +185,7 @@ describe('prePlayCard', () => {
 describe('postPlayCard', () => {
     test('handles an empty draw pile correctly', () => {
         const socketId = 'testSocketId';
-        const card = { suit: 'hearts', value: '5' };
+        const card = { suit: 'hearts', value: '5', numericValue: 5 };
         changeGameState.waitingForPlayers.addPlayer(socketId);
         const player = changeGameState.waitingForPlayers.getPlayer(socketId);
         player.hand = [card];
