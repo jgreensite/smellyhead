@@ -9,10 +9,22 @@
     <script src="script.js" defer></script>
 </head>
 <body>
-    <label for="playerName">Player Name:</label>
-    <input type="text" id="playerName" name="playerName">
-    <button id="registerButton">Register</button>
-    <button id="startButton">Start Game</button>
-    <pre id="gameArea"></pre>
+    <div id="lobby">
+        <label for="playerName">Player Name:</label>
+        <input type="text" id="playerName" name="playerName">
+        <button id="registerButton">Register</button>
+        <button id="startButton">Start Game</button>
+    </div>
+    
+    <div id="gameContainer" style="display: none;">
+        <div id="turnIndicator"></div>
+        <div id="gameState"></div>
+        <pre id="gameArea"></pre>
+        <div id="handCards"></div>
+        <div id="faceUpCards"></div>
+        <div id="actions">
+            <button id="drawCardButton" style="display: none;">Draw Card</button>
+        </div>
+    </div>
 </body>
 </html>

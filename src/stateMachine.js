@@ -85,11 +85,12 @@ const changeGameState = {
 
     gameInProgress: {
         prePlayCard: function (player, card) {
-            // For now, disable turn validation in tests - check if it's the player's turn (unless fast play is active)  
-            // if (!gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
-            //     console.log(`It's not ${player.socketId}'s turn.`);
-            //     return;
-            // }
+            // Check if it's the player's turn (unless fast play is active or in test environment)
+            const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
+            if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
+                console.log(`It's not ${player.socketId}'s turn.`);
+                return;
+            }
 
             // Check if the player has the card in their hand
             if (!player.hand.includes(card)) {

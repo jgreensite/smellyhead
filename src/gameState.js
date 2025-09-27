@@ -30,7 +30,8 @@ class Game {
 
     isPlayerTurn(socketId) {
         const currentPlayer = this.getCurrentPlayer();
-        return currentPlayer && currentPlayer.socketId === socketId;
+        if (!currentPlayer) return false;
+        return currentPlayer.socketId === socketId;
     }
 }
 

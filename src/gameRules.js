@@ -43,6 +43,7 @@ const gameRules = {
         // Default rule: card must be higher than or equal to top card
         // Only apply this when no other special rules are active
         if (gameState.lowerthan === null && gameState.even === null && 
+            (!gameState.suit || gameState.suit === '') &&
             card.numericValue < topCard.numericValue) {
             return false;
         }
@@ -77,8 +78,27 @@ const gameRules = {
             case 'J':
                 // The Jack is the same as the card below it
                 if (secondCard) {
-                    // Jack takes on properties of second card
-                    this.postPlayPowers(secondCard);
+                    // Apply second card's effects instead of Jack's
+                    switch (secondCard.value) {
+                        case '4':
+                            gameState.direction *= -1;
+                            break;
+                        case '6':
+                            gameState.even = true;
+                            break;
+                        case '7':
+                            gameState.lowerthan = true;
+                            break;
+                        case '10':
+                            clearDiscardPile();
+                            gameState.direction *= -1;
+                            gameState.fastPlayActive = true;
+                            break;
+                        case 'Joker':
+                            gameState.suit = secondCard.suit || '';
+                            break;
+                        // No recursion for other Jacks
+                    }
                 }
                 break;
             case '10':

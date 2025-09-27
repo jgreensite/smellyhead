@@ -3,14 +3,135 @@ body {
     background-color: #f0f0f0;
     color: #333;
     text-align: center;
+    margin: 0;
+    padding: 20px;
+}
+
+#lobby {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#gameContainer {
+    margin: 20px auto;
+    max-width: 1200px;
+}
+
+#turnIndicator {
+    background: #e0e0e0;
+    border: 2px solid #333;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 10px 0;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+#turnIndicator.yourTurn {
+    background: #90EE90;
+    color: #333;
+}
+
+#turnIndicator.notYourTurn {
+    background: #FFB6C1;
+    color: #333;
+}
+
+#gameState {
+    margin: 10px 0;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    text-align: left;
 }
 
 #gameArea {
     margin: 20px auto;
     white-space: pre-wrap;
+    background: #fff;
+    border: 2px solid #333;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+#handCards, #faceUpCards {
+    margin: 10px 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.card {
+    border: 2px solid #333;
+    background: #fff;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.card:hover {
+    background: #e0e0e0;
+}
+
+.card.playable {
+    background: #90EE90;
+}
+
+.card.selected {
+    background: #FFD700;
+    border-color: #FFA500;
+}
+
+.card.face-down {
+    background: #333;
+    color: #333;
+    cursor: default;
+}
+
+.card.face-down:hover {
+    background: #333;
 }
 
 button {
     margin: 10px;
     padding: 10px 20px;
+    border: 2px solid #333;
+    background: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #e0e0e0;
+}
+
+button:disabled {
+    background: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+#actions {
+    margin: 20px 0;
+}
+
+.rule-indicator {
+    display: inline-block;
+    margin: 5px;
+    padding: 5px 10px;
+    background: #FFD700;
+    border: 1px solid #333;
+    border-radius: 3px;
+    font-size: 14px;
+}
+
+#gameContainer h3 {
+    margin: 20px 0 10px 0;
+    color: #333;
 }
