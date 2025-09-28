@@ -136,7 +136,7 @@ const gameRules = {
 function clearDiscardPile() {
     // Check if the discard pile is not already empty
     if (gameState.discardPile.length === 0) {
-        console.log('Discard pile is already empty.');
+        console.debug('Discard pile is already empty.');
         return;
     }
     // Move all cards from the discard pile to the graveyard pile

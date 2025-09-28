@@ -1,3 +1,4 @@
+/* global io */
 let socket;
 let gameState = null;
 let mySocketId = null;

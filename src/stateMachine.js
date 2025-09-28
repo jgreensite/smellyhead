@@ -13,13 +13,14 @@ const changeGameState = {
             if (!playerExists) {
                 const newPlayer = new Player(socketId);
                 gameState.players.push(newPlayer);
-                console.log(`Player ${socketId} added. Total players: ${gameState.players.length}`);
+                // Debug: player added (use console.debug to avoid noise in tests)
+                console.debug(`Player ${socketId} added. Total players: ${gameState.players.length}`);
             }
         },
         startGame: function (socketId) {
             const playerExists = gameState.players.some(player => player.socketId === socketId);
             if (!playerExists) {
-                console.log(`Player ${socketId} does not exist.`);
+                console.debug(`Player ${socketId} does not exist.`);
                 return;
             }
 
@@ -34,9 +35,9 @@ const changeGameState = {
             const playerIndex = gameState.players.findIndex(player => player.socketId === socketId);
             if (playerIndex !== -1) {
                 gameState.players.splice(playerIndex, 1);
-                console.log(`Player ${socketId} removed. Total players: ${gameState.players.length}`);
+                console.debug(`Player ${socketId} removed. Total players: ${gameState.players.length}`);
             } else {
-                console.log(`Player ${socketId} does not exist.`);
+                console.debug(`Player ${socketId} does not exist.`);
             }
         },
         listPlayers: function () {
@@ -88,13 +89,14 @@ const changeGameState = {
             // Check if it's the player's turn (unless fast play is active or in test environment)
             const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
             if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
-                console.log(`It's not ${player.socketId}'s turn.`);
+                // Non-fatal debug message for wrong-turn attempts
+                console.debug(`It's not ${player.socketId}'s turn.`);
                 return;
             }
 
             // Check if the player has the card in their hand
             if (!player.hand.includes(card)) {
-                console.log('Player does not have the card in their hand.');
+                console.debug('Player does not have the card in their hand.');
                 return;
             }
             // Check if the card can be played according to the game rules
@@ -159,7 +161,7 @@ function clearDiscardPile() {
     gameState.graveyardPile.push(...gameState.discardPile);
     // Clear the discard pile
     gameState.discardPile = [];
-};
+}
 
 function isValidTransition(currentState, newState) {
     const validTransitions = {

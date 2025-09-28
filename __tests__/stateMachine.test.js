@@ -1,8 +1,7 @@
 const { changeGameState, clearDiscardPile } = require('../src/stateMachine');
 const { gameState } = require('../src/gameState');
 const Deck = require('../src/deck');
-const Player = require('../src/player')
-const gameRules = require('../src/gameRules');
+// gameRules is not required directly in this test file
 
 beforeEach(() => {
     // Reset gameState before each test
@@ -218,7 +217,7 @@ describe('clearDiscardPile', () => {
 
 describe('transition', () => {
     test('transitions to a new state', () => {
-        gameState.currentState = 'start'
+    gameState.currentState = 'start';
         changeGameState.transition('waitingForPlayers');
         expect(gameState.currentState).toEqual('waitingForPlayers');
     });

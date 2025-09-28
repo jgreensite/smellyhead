@@ -1,3 +1,8 @@
+/**
+ * Game represents the shared state for a Smellyhead game session.
+ * It can be instantiated with `createGame()` or a singleton `gameState` is provided
+ * for backward compatibility.
+ */
 class Game {
     constructor() {
         this.players = [];
@@ -13,11 +18,18 @@ class Game {
         this.fastPlayActive = false;
     }
 
+    /**
+     * Return the current player object or null if no players exist.
+     * @returns {Object|null}
+     */
     getCurrentPlayer() {
         if (this.players.length === 0) return null;
         return this.players[this.currentPlayerIndex];
     }
 
+    /**
+     * Advance currentPlayerIndex according to direction.
+     */
     nextPlayer() {
         if (this.players.length === 0) return;
         
@@ -28,6 +40,11 @@ class Game {
         }
     }
 
+    /**
+     * Return true if the provided socketId matches the current player's turn.
+     * @param {string} socketId
+     * @returns {boolean}
+     */
     isPlayerTurn(socketId) {
         const currentPlayer = this.getCurrentPlayer();
         if (!currentPlayer) return false;
