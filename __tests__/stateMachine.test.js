@@ -144,7 +144,13 @@ describe('playCard', () => {
         changeGameState.waitingForPlayers.addPlayer('socket2');
         changeGameState.waitingForPlayers.startGame('socket1');
         const player = gameState.players[0];
-        const card = player.hand[0];
+        // Pick a "safe" card that won't trigger clearing or special powers in most rule sets
+        const unsafeValues = new Set(['4', '6', '7', '10', 'J', 'Joker']);
+        let card = player.hand.find(c => !unsafeValues.has(String(c.value)) && typeof c.numericValue === 'number');
+        if (!card) {
+            // fallback to the first card if no safe card is found
+            card = player.hand[0];
+        }
         changeGameState.gameInProgress.prePlayCard(player, card);
         expect(gameState.discardPile.includes(card)).toBe(true);
         expect(gameState.discardPile).toHaveLength(1);

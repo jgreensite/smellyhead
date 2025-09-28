@@ -26,7 +26,7 @@ const changeGameState = {
 
             const minPlayersToStart = 2;
             if (gameState.players.length < minPlayersToStart) {
-                console.log(`Need at least ${minPlayersToStart} players to start the game.`);
+                console.debug(`Need at least ${minPlayersToStart} players to start the game.`);
                 return;
             }
             changeGameState.transition('setupGame');
@@ -155,7 +155,7 @@ const changeGameState = {
 function clearDiscardPile() {
     // Check if the discard pile is not already empty
     if (gameState.discardPile.length === 0) {
-        console.log('Discard pile is already empty.');
+        console.debug('Discard pile is already empty.');
         return;
     }// Move all cards from the discard pile to the graveyard pile
     gameState.graveyardPile.push(...gameState.discardPile);

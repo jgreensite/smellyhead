@@ -70,12 +70,12 @@ function notifyTurns() {
 }
 
 io.on('connection', (socket) => {
-    console.log(`A user connected: ${socket.id}`);
+    console.debug(`A user connected: ${socket.id}`);
 
     // Log event name for all events
     socket.on('event', (data) => {
         const eventName = data ? data.name : 'Unknown'; // If the event comes with a name property, use it; otherwise, log "Unknown"
-        console.log(`Received event: ${eventName} from user ${socket.id}`);
+        console.debug(`Received event: ${eventName} from user ${socket.id}`);
     });
     
     socket.on('addPlayer', () => {
@@ -85,7 +85,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`Player ${socket.id} disconnected.`);
+        console.debug(`Player ${socket.id} disconnected.`);
         changeGameState.waitingForPlayers.removePlayer(socket.id);
     });
 
@@ -107,7 +107,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('playCard', (data) => {
-        console.log(`Player ${socket.id} wants to play card:`, data);
+        console.debug(`Player ${socket.id} wants to play card:`, data);
         
         const player = gameState.players.find(p => p.socketId === socket.id);
         if (!player) {
@@ -138,7 +138,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('drawCard', () => {
-        console.log(`Player ${socket.id} wants to draw a card`);
+        console.debug(`Player ${socket.id} wants to draw a card`);
         
         const player = gameState.players.find(p => p.socketId === socket.id);
         if (!player) {
@@ -160,4 +160,9 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (require.main === module) {
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+// Export server and io for tests
+module.exports = { server, io, app };
