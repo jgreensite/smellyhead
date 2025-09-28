@@ -74,7 +74,7 @@ const changeGameState = {
             // Set the direction of play, if a specific suit needs to be played, and the "higher than" value
             gameState.direction = 1;
             gameState.lowerthan = 1;
-            gameState.even = 1;
+            gameState.even = 0;
             gameState.suit = '';
 
             changeGameState.transition('gameInProgress',false);
@@ -106,15 +106,17 @@ const changeGameState = {
         },
         postPlayCard: function(player, card){
             // The powers of the played cards are executed
-                if (gameRules.canPlayCard(player, card)) {
-               
-                    // The player draws a card from the draw pile, if it has anything left in it and adds it to their hand
-                    if (gameState.drawPile.length > 0) {
-                        const drawnCard = gameState.drawPile.pop();
-                        player.hand.push(drawnCard);
-                    }
+            if (gameRules.canPlayCard(player, card)) {
+                // Apply the special powers of the card that was just played
+                gameRules.postPlayPowers();
+                
+                // The player draws a card from the draw pile, if it has anything left in it and adds it to their hand
+                if (gameState.drawPile.length > 0) {
+                    const drawnCard = gameState.drawPile.pop();
+                    player.hand.push(drawnCard);
                 }
-            },
+            }
+        },
     },
     transition: function (newState, shouldInitialize = true) {
         if (isValidTransition(gameState.currentState, newState)) {
