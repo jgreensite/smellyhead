@@ -1,0 +1,4 @@
+/* Minimal UI scaffold styles */
+#hand { display:flex; gap:8px; margin-top:8px; }
+.card { padding:8px 12px; border-radius:6px; border:1px solid #333; background:#fff; cursor:pointer; }
+#status { font-weight:600; }
