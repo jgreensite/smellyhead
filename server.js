@@ -79,9 +79,9 @@ io.on('connection', (socket) => {
     });
     
     socket.on('addPlayer', () => {
-        changeGameState.waitingForPlayers.addPlayer(socket.id);
-        // Send confirmation back to client
-        socket.emit('playerAdded', { socketId: socket.id });
+    changeGameState.waitingForPlayers.addPlayer(socket.id);
+    // Send confirmation back to client
+    socket.emit('playerAdded', { socketId: socket.id });
     });
 
     socket.on('disconnect', () => {
@@ -92,7 +92,7 @@ io.on('connection', (socket) => {
     socket.on('startGame', () => {
         const oldState = gameState.currentState;
         changeGameState.waitingForPlayers.startGame(socket.id);
-        
+
         // If game actually started, notify all players
         if (oldState !== gameState.currentState && gameState.currentState === 'gameInProgress') {
             // Send initial game state to all players
@@ -100,7 +100,7 @@ io.on('connection', (socket) => {
                 const playerState = getPlayerGameState(player.socketId);
                 io.to(player.socketId).emit('gameStarted', playerState);
             });
-            
+
             // Notify about initial turn
             notifyTurns();
         }
@@ -150,14 +150,58 @@ io.on('connection', (socket) => {
         if (gameState.drawPile.length > 0) {
             const drawnCard = gameState.drawPile.pop();
             player.hand.push(drawnCard);
-            
+
             // Broadcast updated game state
             broadcastGameState();
         } else {
             socket.emit('error', 'Draw pile is empty');
         }
+        // If we transitioned into gameInProgress, notify all players
+        if (oldState !== gameState.currentState && gameState.currentState === 'gameInProgress') {
+            gameState.players.forEach(p => {
+                try {
+                    io.to(p.socketId).emit('gameStarted', { currentPlayer: gameState.getCurrentPlayer()?.socketId });
+                } catch (e) {
+                    console.debug('Failed to emit gameStarted to', p.socketId, e.message);
+                }
+            });
+>>>>>>> 74b7e28 (feat(ui): wire Join button, show draw/discard counts and face-up/down; add ui integration test)
+        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (require.main === module) {
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`)).on('error', (err) => {
+            if (err && err.code === 'EADDRINUSE') {
+                console.warn(`Port ${PORT} already in use; trying ephemeral port for tests.`);
+                // try ephemeral port for test environments
+                server.listen(0, () => console.log(`Server running on ephemeral port ${server.address().port}`));
+            } else if (err) {
+                throw err;
+            }
+    });
+}
+
+module.exports = { server, io, app };
+
+// Wrap server.listen so callers (tests) can call it and we gracefully fall back on EADDRINUSE
+// to an ephemeral port and still invoke the callback.
+{
+    const originalListen = server.listen.bind(server);
+    server.listen = function wrappedListen(port, cb) {
+        const onError = (err) => {
+            if (err && err.code === 'EADDRINUSE') {
+                server.off('error', onError);
+                // fallback to ephemeral port and call cb when listening
+                originalListen(0, cb);
+            } else {
+                server.off('error', onError);
+                // rethrow for non-EADDRINUSE
+                throw err;
+            }
+        };
+        server.on('error', onError);
+        return originalListen(port, cb);
+    };
+}
