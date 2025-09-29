@@ -1,151 +1,135 @@
-const { gameState } = require('./gameState');
-const Player = require('./player');
-const Deck = require('./deck');
+const { gameState, createGame } = require('./gameState');
 const gameRules = require('./gameRules');
+const Deck = require('./deck');
+const Player = require('./player');
 
 const changeGameState = {
-    start:{
-        //currently a placeholder for anything we want to set-up prior to waiting for players to join
-    },
     waitingForPlayers: {
-        addPlayer: function (socketId) {
-            const playerExists = gameState.players.some(player => player.socketId === socketId);
-            if (!playerExists) {
-                const newPlayer = new Player(socketId);
-                gameState.players.push(newPlayer);
-                console.log(`Player ${socketId} added. Total players: ${gameState.players.length}`);
-            }
+        addPlayer(socketId) {
+            const exists = gameState.players.find(p => p.socketId === socketId);
+            if (exists) return;
+            const player = new Player(socketId);
+            gameState.players.push(player);
+            console.log(`Player ${socketId} added. Total players: ${gameState.players.length}`);
         },
-        startGame: function (socketId) {
-            const playerExists = gameState.players.some(player => player.socketId === socketId);
-            if (!playerExists) {
-                console.log(`Player ${socketId} does not exist.`);
-                return;
-            }
 
-            const minPlayersToStart = 2;
-            if (gameState.players.length < minPlayersToStart) {
-                console.log(`Need at least ${minPlayersToStart} players to start the game.`);
-                return;
-            }
-            changeGameState.transition('setupGame');
-        },
-        removePlayer: function (socketId) {
-            const playerIndex = gameState.players.findIndex(player => player.socketId === socketId);
-            if (playerIndex !== -1) {
-                gameState.players.splice(playerIndex, 1);
+        removePlayer(socketId) {
+            const idx = gameState.players.findIndex(p => p.socketId === socketId);
+            if (idx !== -1) {
+                gameState.players.splice(idx, 1);
                 console.log(`Player ${socketId} removed. Total players: ${gameState.players.length}`);
             } else {
                 console.log(`Player ${socketId} does not exist.`);
             }
         },
-        listPlayers: function () {
+
+        listPlayers() {
             return gameState.players;
         },
-        getPlayer: function (socketId) {
+
+        getPlayer(socketId) {
             return gameState.players.find(player => player.socketId === socketId);
         },
-        clearPlayers: function () {
+
+        clearPlayers() {
             gameState.players = [];
         },
+
+        startGame(socketId) {
+            const player = this.getPlayer(socketId);
+            if (!player) return;
+            if (gameState.players.length < 2) return;
+            // transition to setupGame which will initialize and then gameInProgress
+            changeGameState.transition('setupGame');
+        }
     },
+
     setupGame: {
-        initialize: function () {
+        initialize() {
             const numPlayers = gameState.players.length;
-            const numDecks = Math.ceil(numPlayers / 2);  // Determine the number of decks needed
+            const numDecks = Math.ceil(numPlayers / 2) || 1;
             const deck = new Deck(numDecks);
 
-            deck.shuffle();  // Shuffle all decks together
+            deck.shuffle();
 
-            // Deal each player 3 cards face down, 3 cards face up and 3 cards in their hand
             gameState.players.forEach(player => {
                 player.faceDownCards = deck.draw(3);
                 player.faceUpCards = deck.draw(3);
                 player.hand = deck.draw(3);
             });
 
-            // Place the remaining cards face down in the center as the draw pile
             gameState.drawPile = deck.cards;
-
-            // Designate a discard pile and a graveyard pile for cleared cards
             gameState.discardPile = [];
             gameState.graveyardPile = [];
-
-            // Set the direction of play, initial rules state  
             gameState.direction = 1;
-<<<<<<< HEAD
-            gameState.lowerthan = 1;
-            gameState.even = 0;
-=======
             gameState.lowerthan = null;
             gameState.even = null;
->>>>>>> pr-2-branch
             gameState.suit = '';
             gameState.currentPlayerIndex = 0;
             gameState.fastPlayActive = false;
 
-            changeGameState.transition('gameInProgress',false);
-        },
+            // Move to gameInProgress
+            changeGameState.transition('gameInProgress', false);
+        }
     },
 
     gameInProgress: {
-        prePlayCard: function (player, card) {
-            // Check if it's the player's turn (unless fast play is active or in test environment)
+        prePlayCard(player, card) {
+            // In test env, skip turn checks
             const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
             if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
                 console.log(`It's not ${player.socketId}'s turn.`);
                 return;
             }
 
-            // Check if the player has the card in their hand
-            if (!player.hand.includes(card)) {
+            // Ensure player has the card
+            const hasCard = player.hand && player.hand.includes(card);
+            if (!hasCard) {
                 console.log('Player does not have the card in their hand.');
                 return;
             }
-            // Check if the card can be played according to the game rules
-            if (gameRules.canPlayCard(player, card)) {
 
-                // If the card can be played, add it to the discard pile and remove it from the player's hand
-                gameState.discardPile.push(card);
+            if (gameRules.canPlayCard(player, card)) {
+                // Remove the card from player's hand and push to discard
                 player.hand = player.hand.filter(c => c !== card);
-                
+                gameState.discardPile.push(card);
+
                 // Apply post-play powers
                 gameRules.postPlayPowers(card);
-                
-                // Advance to next player (unless fast play is active)
-                if (!gameState.fastPlayActive) {
-                    gameState.nextPlayer();
+
+                // Draw replacement card if available
+                if (gameState.drawPile && gameState.drawPile.length > 0) {
+                    const drawn = gameState.drawPile.pop();
+                    player.hand.push(drawn);
                 }
-            }  else {
-                // If the card cannot be played, the player must pick up the entire discard pile
+
+                if (!gameState.fastPlayActive) gameState.nextPlayer();
+            } else {
+                // Player picks up the discard pile (keeps their attempted card)
                 player.hand.push(...gameState.discardPile);
                 gameState.discardPile = [];
-                
-                // Player still gets to advance turn after picking up
-                if (!gameState.fastPlayActive) {
-                    gameState.nextPlayer();
-                }
+                if (!gameState.fastPlayActive) gameState.nextPlayer();
             }
-            this.playCard(player,card);
-        },    
-        playCard: function(player,card){
-            this.postPlayCard(player, card);
         },
-        postPlayCard: function(player, card){
-            // The powers of the played cards are executed
+
+        playCard(player, card) {
+            // Helper to perform play (kept minimal for tests)
+            this.prePlayCard(player, card);
+        },
+
+        postPlayCard(player, card) {
+            // Apply post-play effects and allow drawing if available
             if (gameRules.canPlayCard(player, card)) {
-                // Apply the special powers of the card that was just played
-                gameRules.postPlayPowers();
-                
-                // The player draws a card from the draw pile, if it has anything left in it and adds it to their hand
-                if (gameState.drawPile.length > 0) {
-                    const drawnCard = gameState.drawPile.pop();
-                    player.hand.push(drawnCard);
+                gameRules.postPlayPowers(card);
+                if (gameState.drawPile && gameState.drawPile.length > 0) {
+                    const drawn = gameState.drawPile.pop();
+                    player.hand.push(drawn);
                 }
             }
-        },
+        }
     },
-    transition: function (newState, shouldInitialize = true) {
+
+    transition(newState, shouldInitialize = true) {
         if (isValidTransition(gameState.currentState, newState)) {
             gameState.currentState = newState;
             if (shouldInitialize && this[newState] && typeof this[newState].initialize === 'function') {
@@ -154,29 +138,25 @@ const changeGameState = {
         } else {
             throw new Error(`Invalid transition from ${gameState.currentState} to ${newState}`);
         }
-    },
+    }
 };
 
 function clearDiscardPile() {
-    // Check if the discard pile is not already empty
-    if (gameState.discardPile.length === 0) {
-        console.log('Discard pile is already empty.');
-        return;
-    }// Move all cards from the discard pile to the graveyard pile
+    if (!gameState.discardPile || gameState.discardPile.length === 0) return;
     gameState.graveyardPile.push(...gameState.discardPile);
-    // Clear the discard pile
     gameState.discardPile = [];
-};
+}
 
 function isValidTransition(currentState, newState) {
     const validTransitions = {
         start: ['waitingForPlayers'],
         waitingForPlayers: ['setupGame'],
         setupGame: ['gameInProgress'],
-        gameInProgress: ['gameOver', 'setupGame'],
+        gameInProgress: ['gameOver', 'setupGame']
     };
 
+    if (!validTransitions[currentState]) return false;
     return validTransitions[currentState].includes(newState);
 }
 
-module.exports = {changeGameState, clearDiscardPile};
+module.exports = { changeGameState, clearDiscardPile };
