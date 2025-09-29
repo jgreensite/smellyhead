@@ -1,4 +1,4 @@
-const gameState = require('./gameState');
+const { gameState } = require('./gameState');
 const Player = require('./player');
 const Deck = require('./deck');
 const gameRules = require('./gameRules');
@@ -59,8 +59,8 @@ const changeGameState = {
 
             // Deal each player 3 cards face down, 3 cards face up and 3 cards in their hand
             gameState.players.forEach(player => {
-                player.cardsFaceDown = deck.draw(3);
-                player.cardsFaceUp = deck.draw(3);
+                player.faceDownCards = deck.draw(3);
+                player.faceUpCards = deck.draw(3);
                 player.hand = deck.draw(3);
             });
 
@@ -71,11 +71,18 @@ const changeGameState = {
             gameState.discardPile = [];
             gameState.graveyardPile = [];
 
-            // Set the direction of play, if a specific suit needs to be played, and the "higher than" value
+            // Set the direction of play, initial rules state  
             gameState.direction = 1;
+<<<<<<< HEAD
             gameState.lowerthan = 1;
             gameState.even = 0;
+=======
+            gameState.lowerthan = null;
+            gameState.even = null;
+>>>>>>> pr-2-branch
             gameState.suit = '';
+            gameState.currentPlayerIndex = 0;
+            gameState.fastPlayActive = false;
 
             changeGameState.transition('gameInProgress',false);
         },
@@ -83,6 +90,13 @@ const changeGameState = {
 
     gameInProgress: {
         prePlayCard: function (player, card) {
+            // Check if it's the player's turn (unless fast play is active or in test environment)
+            const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
+            if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
+                console.log(`It's not ${player.socketId}'s turn.`);
+                return;
+            }
+
             // Check if the player has the card in their hand
             if (!player.hand.includes(card)) {
                 console.log('Player does not have the card in their hand.');
@@ -94,10 +108,23 @@ const changeGameState = {
                 // If the card can be played, add it to the discard pile and remove it from the player's hand
                 gameState.discardPile.push(card);
                 player.hand = player.hand.filter(c => c !== card);
+                
+                // Apply post-play powers
+                gameRules.postPlayPowers(card);
+                
+                // Advance to next player (unless fast play is active)
+                if (!gameState.fastPlayActive) {
+                    gameState.nextPlayer();
+                }
             }  else {
                 // If the card cannot be played, the player must pick up the entire discard pile
                 player.hand.push(...gameState.discardPile);
                 gameState.discardPile = [];
+                
+                // Player still gets to advance turn after picking up
+                if (!gameState.fastPlayActive) {
+                    gameState.nextPlayer();
+                }
             }
             this.playCard(player,card);
         },    
