@@ -11,20 +11,35 @@
     <script src="ui.js" defer></script>
 </head>
 <body>
-    <div id="lobby">
+    <div class="controls" id="lobby">
         <label for="playerName">Player Name:</label>
-        <input type="text" id="playerName" name="playerName">
+        <input type="text" id="playerName" name="playerName" />
         <button id="registerButton">Register</button>
         <button id="startButton">Start Game</button>
         <button id="joinButton">Join as Local Player</button>
     </div>
-    
-    <div id="gameContainer" style="display: none;">
+
+    <div id="status" class="status"></div>
+
+    <div class="piles">
+        <div class="pile">
+            <div class="pile-label">Discard</div>
+            <div id="faceUp" class="pile-faceup"></div>
+            <div class="pile-count">(<span id="discardCount">0</span>)</div>
+        </div>
+        <div class="pile">
+            <div class="pile-label">Draw</div>
+            <div id="faceDown" class="pile-facedown"></div>
+            <div class="pile-count">(<span id="drawCount">0</span>)</div>
+        </div>
+    </div>
+
+    <div id="gameContainer">
         <div id="turnIndicator"></div>
         <div id="gameState"></div>
-        <pre id="gameArea"></pre>
-        <div id="handCards"></div>
+        <div id="hand" class="hand"></div>
         <div id="faceUpCards"></div>
+        <pre id="gameArea"></pre>
         <div id="actions">
             <button id="drawCardButton" style="display: none;">Draw Card</button>
         </div>
