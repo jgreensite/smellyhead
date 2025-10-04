@@ -1,0 +1,128 @@
+name: PR preview smoke test
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  find-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required tools
+        run: |
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y jq curl >/dev/null
+
+      - name: Skip if PR requests no preview
+        run: |
+          # Exit early if PR title contains [skip preview] (case-insensitive)
+          if [ -n "${GITHUB_EVENT_PATH:-}" ] && command -v jq >/dev/null 2>&1; then
+            TITLE=$(jq -r .pull_request.title "$GITHUB_EVENT_PATH" || echo "")
+            echo "PR title: $TITLE"
+            if echo "$TITLE" | grep -qi '\[skip preview\]'; then
+              echo "Skipping preview workflow due to title marker"
+              exit 0
+            fi
+            # Check labels for render-preview-skip
+            LABEL_MATCH=$(jq -r '.pull_request.labels[]?.name' "$GITHUB_EVENT_PATH" 2>/dev/null | grep -E '^render-preview-skip$' || true)
+            if [ -n "$LABEL_MATCH" ]; then
+              echo "Skipping preview workflow due to label: $LABEL_MATCH"
+              exit 0
+            fi
+          else
+            echo "No event payload or jq missing; continuing"
+          fi
+
+      - name: Ensure Render API key exists
+        if: ${{ !secrets.RENDER_API_KEY }}
+        run: |
+          echo "RENDER_API_KEY secret is not set; skipping preview lookup and smoke test"
+          exit 0
+
+      - name: Find Render preview service for this PR branch (polling)
+        id: find_service
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          echo "Looking up Render services for branch: $BRANCH"
+          MAX_ATTEMPTS=12
+          SLEEP_SECS=10
+          attempt=0
+          found="false"
+          preview_url=""
+          service_id=""
+          service_name=""
+          while [ $attempt -lt $MAX_ATTEMPTS ]; do
+            attempt=$((attempt+1))
+            echo "Attempt $attempt/$MAX_ATTEMPTS: querying Render services..."
+            services=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" https://api.render.com/v1/services)
+            match=$(echo "$services" | jq -r --arg BRANCH "$BRANCH" '.[] | select(.branch == $BRANCH) | {id: .id, name: .name, branch: .branch, url: (.serviceDetails.url // .serviceDetails.defaultDomain // .serviceDetails.defaultIngress // .url // .defaultDomain // .externalUrl // .service_url // empty)}' | jq -s '.[0]') || true
+            if [ -n "$match" ] && [ "$match" != "null" ]; then
+              found="true"
+              service_id=$(echo "$match" | jq -r '.id') || true
+              service_name=$(echo "$match" | jq -r '.name') || true
+              preview_url=$(echo "$match" | jq -r '.url // ""') || true
+              echo "Found service: $service_name ($service_id) with URL: $preview_url"
+              break
+            fi
+            echo "No matching service yet. Sleeping $SLEEP_SECS seconds..."
+            sleep $SLEEP_SECS
+          done
+
+          if [ "$found" = "true" ]; then
+            echo "service_found=true" >> $GITHUB_OUTPUT
+            echo "preview_url=$preview_url" >> $GITHUB_OUTPUT
+            echo "service_id=$service_id" >> $GITHUB_OUTPUT
+            echo "service_name=$service_name" >> $GITHUB_OUTPUT
+          else
+            echo "service_found=false" >> $GITHUB_OUTPUT
+            echo "No service matching branch $BRANCH found after $MAX_ATTEMPTS attempts. Dumping services for debugging..."
+            echo "$services" | jq -C '.[] | {id: .id, name: .name, branch: .branch}' || true
+          fi
+
+      - name: Post preview URL to PR
+        if: steps.find_service.outputs.service_found == 'true' && steps.find_service.outputs.preview_url != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.number }}
+          URL=${{ steps.find_service.outputs.preview_url }}
+          OWNER=${{ github.repository_owner }}
+          REPO=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "Posting preview URL to PR #$PR_NUMBER: $URL"
+          payload=$(jq -n --arg body "Render preview: $URL" '{body: $body}')
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments" -d "$payload" >/dev/null
+
+      - name: Run smoke test against preview URL (retry until 200)
+        if: steps.find_service.outputs.service_found == 'true' && steps.find_service.outputs.preview_url != ''
+        env:
+          PREVIEW_URL: ${{ steps.find_service.outputs.preview_url }}
+        run: |
+          echo "Pinging preview URL with retries: $PREVIEW_URL"
+          MAX_RETRIES=12
+          SLEEP_SECONDS=5
+          attempt=0
+          passed=false
+          while [ $attempt -lt $MAX_RETRIES ]; do
+            attempt=$((attempt+1))
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL" ) || true
+            echo "Attempt $attempt: HTTP $status"
+            if [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+              echo "Preview smoke test passed (status $status)"
+              passed=true
+              break
+            fi
+            echo "Not ready yet, sleeping $SLEEP_SECONDS seconds..."
+            sleep $SLEEP_SECONDS
+          done
+          if [ "$passed" != "true" ]; then
+            echo "Preview smoke test failed after $MAX_RETRIES attempts"
+            exit 1
+          fi
+
+      - name: No preview found (info)
+        if: steps.find_service.outputs.service_found != 'true'
+        run: |
+          echo "No preview service was found for branch ${{ github.head_ref }}. Render may not have created it yet or naming differs."
