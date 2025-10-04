@@ -6,26 +6,22 @@ class Game {
         this.graveyardPile = [];
         this.currentState = 'waitingForPlayers';
         this.suit = '';
-        this.lowerthan = false;
+    // Rule flags default for a freshly constructed Game
+    this.lowerthan = false;
         this.direction = 1;
-        this.even = false;
+    this.even = false;
         this.currentPlayerIndex = 0;
         this.fastPlayActive = false;
     }
 
     getCurrentPlayer() {
-        if (this.players.length === 0) return null;
-        return this.players[this.currentPlayerIndex];
+        if (!this.players || this.players.length === 0) return null;
+        return this.players[this.currentPlayerIndex % this.players.length];
     }
 
     nextPlayer() {
-        if (this.players.length === 0) return;
-        
-        if (this.direction === 1) {
-            this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
-        } else {
-            this.currentPlayerIndex = (this.currentPlayerIndex - 1 + this.players.length) % this.players.length;
-        }
+        if (!this.players || this.players.length === 0) return;
+        this.currentPlayerIndex = (this.currentPlayerIndex + this.direction + this.players.length) % this.players.length;
     }
 
     isPlayerTurn(socketId) {
@@ -39,10 +35,9 @@ function createGame() {
     return new Game();
 }
 
-// Create default singleton for backward compatibility
-const gameState = new Game();
-// The shared singleton used by tests and server should default rule flags to null
-gameState.lowerthan = null;
-gameState.even = null;
+// Create and export a singleton for backwards compatibility and tests
+const gameState = createGame();
 
-module.exports = { createGame, gameState };
+module.exports = gameState;
+module.exports.createGame = createGame;
+module.exports.gameState = gameState;

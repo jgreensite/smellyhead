@@ -11,13 +11,27 @@ function getSecondCard() {
     return null;
 }
 
+function numericValueOf(card) {
+    if (!card) return 0;
+    if (typeof card.numericValue === 'number') return card.numericValue;
+    const parsed = parseInt(card.value);
+    if (!isNaN(parsed)) return parsed;
+    switch (card.value) {
+        case 'J': return 11;
+        case 'Q': return 12;
+        case 'K': return 13;
+        case 'A': return 14;
+        default: return 0;
+    }
+}
+
 const gameRules = {
-    canPlayCard: function (player, card) {
+    canPlayCard(player, card) {
         const topCard = getTopCard();
         if (!topCard) return true;
 
-        const cardValue = card.numericValue || (parseInt(card.value) || (card.value === 'J' ? 11 : card.value === 'Q' ? 12 : card.value === 'K' ? 13 : card.value === 'A' ? 14 : 0));
-        const topValue = topCard.numericValue || (parseInt(topCard.value) || (topCard.value === 'J' ? 11 : topCard.value === 'Q' ? 12 : topCard.value === 'K' ? 13 : topCard.value === 'A' ? 14 : 0));
+        const cardValue = numericValueOf(card);
+        const topValue = numericValueOf(topCard);
 
         if (gameState.even === true && (cardValue % 2) !== 0) return false;
         if (gameState.even === false && (cardValue % 2) === 0) return false;
@@ -27,16 +41,18 @@ const gameRules = {
         const noSpecial = (gameState.lowerthan === null || gameState.lowerthan === false) && (gameState.even === null) && (!gameState.suit || gameState.suit === '');
         if (noSpecial && cardValue < topValue) return false;
 
+        // Always allow these special cards
         if (card.value === '2' || card.value === '10' || card.value === 'Joker') return true;
 
         return true;
     },
 
-    postPlayPowers: function (playedCard) {
+    postPlayPowers(playedCard) {
         const topCard = getTopCard();
         if (!topCard) return;
         const secondCard = getSecondCard();
 
+        // Reset rule flags unless re-applied below
         gameState.even = null;
         gameState.lowerthan = null;
         gameState.suit = '';
@@ -56,16 +72,29 @@ const gameRules = {
                 gameState.lowerthan = true;
                 break;
             case 'J':
-                if (secondCard) {
-                    if (secondCard.value === '4') gameState.direction *= -1;
-                    if (secondCard.value === '6') gameState.even = true;
-                    if (secondCard.value === '7') gameState.lowerthan = true;
-                    if (secondCard.value === '10') {
-                        clearDiscardPile();
-                        gameState.direction *= -1;
-                        gameState.fastPlayActive = true;
+                if (secondCard && secondCard.value !== 'J') {
+                    // Apply second card's effects
+                    switch (secondCard.value) {
+                        case '4':
+                            gameState.direction *= -1;
+                            break;
+                        case '6':
+                            gameState.even = true;
+                            break;
+                        case '7':
+                            gameState.lowerthan = true;
+                            break;
+                        case '10':
+                            clearDiscardPile();
+                            gameState.direction *= -1;
+                            gameState.fastPlayActive = true;
+                            break;
+                        case 'Joker':
+                            gameState.suit = secondCard.suit || '';
+                            break;
+                        default:
+                            break;
                     }
-                    if (secondCard.value === 'Joker') gameState.suit = secondCard.suit || '';
                 }
                 break;
             case '10':
@@ -80,6 +109,7 @@ const gameRules = {
                 break;
         }
 
+        // Four of a kind clears the discard pile
         if (gameState.discardPile.length >= 4) {
             const last = gameState.discardPile.length - 1;
             const v0 = gameState.discardPile[last].value;
@@ -90,7 +120,8 @@ const gameRules = {
         }
     },
 
-    clearDiscardPile: function () {
+    clearDiscardPile() {
+        if (gameState.discardPile.length === 0) return;
         gameState.graveyardPile.push(...gameState.discardPile);
         gameState.discardPile = [];
     }
