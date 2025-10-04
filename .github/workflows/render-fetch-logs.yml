@@ -1,0 +1,80 @@
+name: Fetch Render deploy logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_id:
+        description: 'Render service id (srv-...)'
+        required: true
+      deploy_id:
+        description: 'Optional deploy id to fetch logs for; leave blank for latest'
+        required: false
+      post_to_pr:
+        description: 'PR number to post logs to (optional)'
+        required: false
+
+jobs:
+  fetch-logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure tools
+        run: sudo apt-get update -y && sudo apt-get install -y jq curl >/dev/null
+
+      - name: Lookup deploy
+        id: lookup
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ github.event.inputs.service_id }}
+          DEPLOY_ID: ${{ github.event.inputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ]; then
+            echo "RENDER_API_KEY not set; aborting"
+            exit 1
+          fi
+          if [ -n "$DEPLOY_ID" ]; then
+            echo "Using provided deploy id: $DEPLOY_ID"
+            echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          else
+            echo "Fetching latest deploy for service $SERVICE_ID"
+            deploy=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys" | jq -r '.[0].id')
+            if [ -z "$deploy" ] || [ "$deploy" == "null" ]; then
+              echo "no_deploy_found=true" >> $GITHUB_OUTPUT
+            else
+              echo "deploy_id=$deploy" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Fetch deploy details and logs
+        if: steps.lookup.outputs.no_deploy_found != 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DEPLOY_ID: ${{ steps.lookup.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          echo "Fetching deploy details for $DEPLOY_ID"
+          details=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/deploys/${DEPLOY_ID}")
+          echo "$details" | jq '.' > /tmp/deploy_details.json
+          # Try to extract a log URL or the build output if present
+          logs=$(echo "$details" | jq -r '.file_url // .log_url // empty') || true
+          if [ -n "$logs" ]; then
+            echo "Found logs URL: $logs"
+            echo "logs_url=$logs" >> $GITHUB_OUTPUT
+            echo "logs_content=$(curl -s $logs | sed -n '1,200p' | sed 's/"/\"/g')" >> $GITHUB_OUTPUT
+          else
+            echo "No direct logs URL in deploy details; attempting to fetch deploy log via /deploys/<id>/logs"
+            raw=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/deploys/${DEPLOY_ID}/logs" || true)
+            echo "$raw" | jq -r '.' > /tmp/deploy_raw_logs.json || true
+            echo "logs_content=$(echo "$raw" | head -c 2000 | sed 's/"/\"/g')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post logs to PR (optional)
+        if: ${{ github.event.inputs.post_to_pr != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.inputs.post_to_pr }}
+        run: |
+          OWNER=${{ github.repository_owner }}
+          REPO=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          BODY=$(jq -nr --arg s "Deploy logs for service ${{ github.event.inputs.service_id }} (deploy ${{ steps.lookup.outputs.deploy_id }}):\n\n$(echo "${{ steps.lookup.outputs.logs_content }}" )" '{body: $s}')
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments" -d "$BODY" >/dev/null
