@@ -1,0 +1,29 @@
+name: Render smoke test
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+jobs:
+  smoke-test:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run HTTP smoke check against Render test URL
+        run: |
+          echo "Pinging Render test URL..."
+          if [ -z "${{ secrets.RENDER_SMOKE_URL }}" ]; then
+            echo "RENDER_SMOKE_URL secret is not set - skipping smoke test";
+            exit 0;
+          fi
+          status=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_SMOKE_URL }}")
+          echo "HTTP status: $status"
+          if [ "$status" -ge 200 ] && [ "$status" -lt 500 ]; then
+            echo "Smoke test passed (status $status)";
+            exit 0;
+          else
+            echo "Smoke test failed (status $status)";
+            exit 1;
+          fi

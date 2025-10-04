@@ -2,7 +2,7 @@ const ioClient = require('socket.io-client');
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const gameState = require('../src/gameState');
+const { gameState } = require('../src/gameState');
 const { changeGameState } = require('../src/stateMachine');
 
 describe('integration: multi-player turns (isolated server)', () => {

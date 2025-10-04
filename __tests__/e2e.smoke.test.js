@@ -1,8 +1,8 @@
 const ioClient = require('socket.io-client');
 const { server } = require('../server');
-const gameState = require('../src/gameState');
+const { gameState } = require('../src/gameState');
 
-let URL = 'http://localhost:3000';
+const URL = 'http://localhost:3000';
 
 describe('E2E smoke', () => {
   let client1, client2;
@@ -10,12 +10,13 @@ describe('E2E smoke', () => {
   beforeAll((done) => {
     // ensure clean state
     gameState.players = [];
-    // Start server on ephemeral port to avoid conflicts
-    server.listen(0, () => {
-      const port = server.address().port;
-      URL = `http://localhost:${port}`;
+    // Start server on default port for E2E test
+    const PORT = process.env.PORT || 3000;
+    if (!server.listening) {
+      server.listen(PORT, () => setTimeout(done, 150));
+    } else {
       setTimeout(done, 150);
-    });
+    }
   });
 
   afterAll((done) => {
@@ -27,8 +28,8 @@ describe('E2E smoke', () => {
   test('two clients can join and start a game', (done) => {
     let startedCount = 0;
 
-  client1 = ioClient(URL);
-  client2 = ioClient(URL);
+    client1 = ioClient(URL);
+    client2 = ioClient(URL);
 
     client1.on('connect', () => {
       client1.emit('addPlayer');

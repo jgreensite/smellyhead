@@ -1,4 +1,4 @@
-const gameState = require('../src/gameState');
+const { gameState } = require('../src/gameState');
 
 beforeEach(() => {
     gameState.players = [];

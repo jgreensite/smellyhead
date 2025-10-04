@@ -5,75 +5,80 @@ function getTopCard() {
 }
 
 function getSecondCard() {
-    if (gameState.discardPile.length >= 2) {
+    if(gameState.discardPile.length >= 2){
         return gameState.discardPile[gameState.discardPile.length - 2];
-    }
-    return null;
-}
-
-function numericValueOf(card) {
-    if (!card) return 0;
-    if (typeof card.numericValue === 'number') return card.numericValue;
-    const parsed = parseInt(card.value);
-    if (!isNaN(parsed)) return parsed;
-    switch (card.value) {
-        case 'J': return 11;
-        case 'Q': return 12;
-        case 'K': return 13;
-        case 'A': return 14;
-        default: return 0;
+    } else {
+        return null;
     }
 }
 
 const gameRules = {
-    canPlayCard(player, card) {
-        const topCard = getTopCard();
-        if (!topCard) return true;
 
-        const cardValue = numericValueOf(card);
-        const topValue = numericValueOf(topCard);
+    canPlayCard: function (player, card) {
+        let topCard = getTopCard();
+        // If the discard pile is empty, any card can be played
+        if (!topCard) {
+            return true;
+        }
 
-        if (gameState.even === true && (cardValue % 2) !== 0) return false;
-        if (gameState.even === false && (cardValue % 2) === 0) return false;
-        if (gameState.lowerthan === true && cardValue >= 7) return false;
-        if (gameState.suit && gameState.suit !== '' && card.suit !== gameState.suit) return false;
+        // Check the card can be played based on the status of the gameState rule flags
+        // Must play even card
+        if (gameState.even === true && card.numericValue % 2 !== 0) {
+            return false;
+        }
+        // Must play odd card  
+        if (gameState.even === false && card.numericValue % 2 === 0) {
+            return false;
+        }
+        // Must play lower than 7
+        if (gameState.lowerthan === true && card.numericValue >= 7) {
+            return false;
+        }
+        
+        // Check if specific suit is required
+        if (gameState.suit && gameState.suit !== '' && card.suit !== gameState.suit) {
+            return false;
+        }
 
-        const noSpecial = (gameState.lowerthan === null || gameState.lowerthan === false) && (gameState.even === null) && (!gameState.suit || gameState.suit === '');
-        if (noSpecial && cardValue < topValue) return false;
-
-        // Always allow these special cards
-        if (card.value === '2' || card.value === '10' || card.value === 'Joker') return true;
+        // Default rule: card must be higher than or equal to top card
+        // Only apply this when no other special rules are active
+        if (gameState.lowerthan === null && gameState.even === null && 
+            (!gameState.suit || gameState.suit === '') &&
+            card.numericValue < topCard.numericValue) {
+            return false;
+        }
 
         return true;
     },
-
-    postPlayPowers(playedCard) {
-        const topCard = getTopCard();
-        if (!topCard) return;
-        const secondCard = getSecondCard();
-
-        // Reset rule flags unless re-applied below
-        gameState.even = null;
-        gameState.lowerthan = null;
-        gameState.suit = '';
-        gameState.fastPlayActive = false;
-
+    
+    postPlayPowers: function(playedCard){
+        let topCard = getTopCard();
+        let secondCard = getSecondCard();
+        
+        // Reset rule flags to defaults
+        gameState.even = null; // no parity requirement
+        gameState.lowerthan = null; // must play higher than or equal to top card
+        gameState.suit = ''; // no suit requirement
+        gameState.fastPlayActive = false; // reset fast play
+        
+        // Check the special powers of the top card (the card just played)
         switch (topCard.value) {
-            case '2':
-                gameState.direction *= -1;
-                break;
             case '4':
+                // Changes direction of play
                 gameState.direction *= -1;
                 break;
             case '6':
+                // The next player must play an even card
                 gameState.even = true;
                 break;
             case '7':
+                // The next player must play a card lower than 7
                 gameState.lowerthan = true;
                 break;
             case 'J':
-                if (secondCard && secondCard.value !== 'J') {
-                    // Apply second card's effects
+                // The Jack is the same as the card below it
+                if (secondCard) {
+                    // Apply second card's effects instead of Jack's
                     switch (secondCard.value) {
                         case '4':
                             gameState.direction *= -1;
@@ -92,44 +97,51 @@ const gameRules = {
                         case 'Joker':
                             gameState.suit = secondCard.suit || '';
                             break;
-                        default:
-                            break;
+                        // No recursion for other Jacks
                     }
                 }
                 break;
             case '10':
+                // Clears out the discard pile into the graveyard and changes direction
                 clearDiscardPile();
                 gameState.direction *= -1;
+                // Activate fast play mode for chain clearing
                 gameState.fastPlayActive = true;
                 break;
             case 'Joker':
+                // Can be played on anything, changes the suit requirement
                 gameState.suit = playedCard.suit || '';
                 break;
             default:
+                // If the top card has no special power, then the game rules are not affected
                 break;
         }
-
-        // Four of a kind clears the discard pile
-        if (gameState.discardPile.length >= 4) {
-            const last = gameState.discardPile.length - 1;
-            const v0 = gameState.discardPile[last].value;
-            if (v0 === gameState.discardPile[last - 1].value && v0 === gameState.discardPile[last - 2].value && v0 === gameState.discardPile[last - 3].value) {
+        
+        // Check for four-of-a-kind at top of discard pile
+        if(gameState.discardPile.length >= 4){
+            if(gameState.discardPile[gameState.discardPile.length-1].value === 
+                gameState.discardPile[gameState.discardPile.length-2].value &&
+                gameState.discardPile[gameState.discardPile.length-2].value ===
+                gameState.discardPile[gameState.discardPile.length-3].value &&
+                gameState.discardPile[gameState.discardPile.length-3].value ===
+                gameState.discardPile[gameState.discardPile.length-4].value){
                 clearDiscardPile();
+                // Activate fast play for chain reactions
                 gameState.fastPlayActive = true;
             }
         }
-    },
-
-    clearDiscardPile() {
-        if (gameState.discardPile.length === 0) return;
-        gameState.graveyardPile.push(...gameState.discardPile);
-        gameState.discardPile = [];
     }
 };
 
 function clearDiscardPile() {
-    if (gameState.discardPile.length === 0) return;
+    // Check if the discard pile is not already empty
+    if (gameState.discardPile.length === 0) {
+        console.debug('Discard pile is already empty.');
+        return;
+    }
+    // Move all cards from the discard pile to the graveyard pile
     gameState.graveyardPile.push(...gameState.discardPile);
+    // Clear the discard pile
     gameState.discardPile = [];
 }
 

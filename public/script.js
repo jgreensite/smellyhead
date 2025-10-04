@@ -3,6 +3,7 @@ let socket;
 let gameState = null;
 let mySocketId = null;
 let selectedCard = null;
+
 window.onload = function() {
     socket = io.connect('http://localhost:3000');
 
