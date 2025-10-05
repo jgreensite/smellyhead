@@ -11,8 +11,12 @@ const io = socketIo(server);
 // Enable CORS for all routes
 app.use(function (req, res, next) {
     res.setHeader('Access-Control-Allow-Origin', '*'); // Update this to the allowed origin
-    res.setHeader('Access-Control-Allow-Methods', 'GET, SET, POST, DELETE');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
     next();
   });
 
@@ -49,26 +53,6 @@ function getPlayerGameState(socketId) {
     };
 }
 
-function broadcastGameState() {
-    gameState.players.forEach(player => {
-        const playerState = getPlayerGameState(player.socketId);
-        io.to(player.socketId).emit('updateUI', playerState);
-    });
-}
-
-function notifyTurns() {
-    const currentPlayer = gameState.getCurrentPlayer();
-    if (!currentPlayer) return;
-    
-    gameState.players.forEach(player => {
-        if (player.socketId === currentPlayer.socketId) {
-            io.to(player.socketId).emit('yourTurn');
-        } else {
-            io.to(player.socketId).emit('notYourTurn', currentPlayer.socketId);
-        }
-    });
-}
-
 io.on('connection', (socket) => {
     console.debug(`A user connected: ${socket.id}`);
 
@@ -78,16 +62,45 @@ io.on('connection', (socket) => {
         console.debug(`Received event: ${eventName} from user ${socket.id}`);
     });
     
-    socket.on('addPlayer', () => {
+    // Accept addPlayer with optional payload and callback to match UI
+    socket.on('addPlayer', (payload, ack) => {
         changeGameState.waitingForPlayers.addPlayer(socket.id);
-        // Send confirmation back to client
-        socket.emit('playerAdded', { socketId: socket.id });
+        const response = { socketId: socket.id };
+        if (typeof ack === 'function') {
+            ack(response);
+        } else {
+            // Send confirmation back to client
+            socket.emit('playerAdded', response);
+        }
     });
 
     socket.on('disconnect', () => {
         console.debug(`Player ${socket.id} disconnected.`);
         changeGameState.waitingForPlayers.removePlayer(socket.id);
     });
+
+    // Emit both 'updateUI' (per-player) and legacy 'gameState' for older UI integration tests
+    function broadcastGameState() {
+        gameState.players.forEach(player => {
+            const playerState = getPlayerGameState(player.socketId);
+            io.to(player.socketId).emit('updateUI', playerState);
+            // emit legacy event expected by some clients/tests
+            io.to(player.socketId).emit('gameState', playerState);
+        });
+    }
+
+    function notifyTurns() {
+        const currentPlayer = gameState.getCurrentPlayer();
+        if (!currentPlayer) return;
+        
+        gameState.players.forEach(player => {
+            if (player.socketId === currentPlayer.socketId) {
+                io.to(player.socketId).emit('yourTurn');
+            } else {
+                io.to(player.socketId).emit('notYourTurn', currentPlayer.socketId);
+            }
+        });
+    }
 
     socket.on('startGame', () => {
         const oldState = gameState.currentState;
@@ -147,10 +160,10 @@ io.on('connection', (socket) => {
         }
         
         // Draw a card if possible
-        if (gameState.drawPile.length > 0) {
+        if (gameState.drawPile && gameState.drawPile.length > 0) {
             const drawnCard = gameState.drawPile.pop();
             player.hand.push(drawnCard);
-            
+
             // Broadcast updated game state
             broadcastGameState();
         } else {
