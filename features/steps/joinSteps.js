@@ -1,6 +1,5 @@
 const { Given, When, Then, Before, After } = require('@cucumber/cucumber');
 const { chromium } = require('playwright');
-const path = require('path');
 
 let browser, page;
 
