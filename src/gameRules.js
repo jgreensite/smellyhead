@@ -54,6 +54,9 @@ const gameRules = {
     postPlayPowers: function(playedCard){
         let topCard = getTopCard();
         let secondCard = getSecondCard();
+        // In some test flows the played card may not yet be present on the discard pile.
+        // Use the playedCard as a fallback so we never dereference undefined.
+        const effectiveTop = topCard || playedCard;
         
         // Reset rule flags to defaults
         gameState.even = null; // no parity requirement
@@ -62,7 +65,8 @@ const gameRules = {
         gameState.fastPlayActive = false; // reset fast play
         
         // Check the special powers of the top card (the card just played)
-        switch (topCard.value) {
+        if (!effectiveTop) return; // nothing to do if neither discard nor played card exist
+        switch (effectiveTop.value) {
             case '4':
                 // Changes direction of play
                 gameState.direction *= -1;
@@ -110,7 +114,7 @@ const gameRules = {
                 break;
             case 'Joker':
                 // Can be played on anything, changes the suit requirement
-                gameState.suit = playedCard.suit || '';
+                gameState.suit = playedCard ? (playedCard.suit || '') : (effectiveTop.suit || '');
                 break;
             default:
                 // If the top card has no special power, then the game rules are not affected
