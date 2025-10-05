@@ -3,6 +3,7 @@ name: PR preview smoke test
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  workflow_dispatch:
 
 jobs:
   find-and-smoke:
@@ -96,7 +97,17 @@ jobs:
             echo "service_found=false" >> $GITHUB_OUTPUT
             echo "No service matching branch $BRANCH found after $MAX_ATTEMPTS attempts. Dumping services for debugging..."
             echo "$services" | jq -C '.[] | {id: .id, name: .name, branch: .branch}' || true
+            # Upload services json for debugging
+            echo "$services" > services.json || true
+            echo "services.json created"
           fi
+
+      - name: Upload services debug artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: services-json
+          path: services.json
 
       - name: RENDER_API_KEY missing notice (fork-safe)
         if: ${{ env.RENDER_API_KEY == '' }}
