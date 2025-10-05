@@ -37,9 +37,20 @@ jobs:
             echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
           else
             echo "Fetching latest deploy for service $SERVICE_ID"
-            deploy=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys" | jq -r '.[0].id')
+            deploy_resp=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
+            # Try multiple parsing strategies because Render's API may return an array or an object wrapper
+            deploy=$(echo "$deploy_resp" | jq -r '
+              if (type == "array") then .[0].id
+              elif (.id? ) then .id
+              elif (.deploys? and (.deploys|type=="array")) then .deploys[0].id
+              else empty end' 2>/dev/null || true)
+
             if [ -z "$deploy" ] || [ "$deploy" == "null" ]; then
               echo "no_deploy_found=true" >> $GITHUB_OUTPUT
+              # Save a small snippet of the raw response for debugging
+              echo "raw_deploy_response=$(echo "$deploy_resp" | sed -n '1,800p' | sed 's/"/\\"/g')" >> $GITHUB_OUTPUT
+              echo "Raw deploy response (truncated):"
+              echo "$deploy_resp" | sed -n '1,200p'
             else
               echo "deploy_id=$deploy" >> $GITHUB_OUTPUT
             fi

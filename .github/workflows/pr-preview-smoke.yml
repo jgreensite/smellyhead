@@ -55,16 +55,19 @@ jobs:
           fi
 
           echo "Looking up Render services for branch: $BRANCH (PR #$PR_NUMBER)"
-          MAX_ATTEMPTS=12
-          SLEEP_SECS=10
+          # Backoff intervals (seconds). Default is three attempts: 30s, 60s, 180s.
+          # Override by setting BACKOFF_INTERVALS (comma-separated) in the workflow's env if needed.
+          BACKOFF_INTERVALS=${BACKOFF_INTERVALS:-"30,60,180"}
+          IFS=',' read -r -a intervals <<< "$BACKOFF_INTERVALS"
           attempt=0
           found="false"
           preview_url=""
           service_id=""
           service_name=""
-          while [ $attempt -lt $MAX_ATTEMPTS ]; do
-            attempt=$((attempt+1))
-            echo "Attempt $attempt/$MAX_ATTEMPTS: querying Render services..."
+          total=${#intervals[@]}
+          for idx in "${!intervals[@]}"; do
+            attempt=$((idx+1))
+            echo "Attempt $attempt/$total: querying Render services..."
             services=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" https://api.render.com/v1/services)
             # Try multiple matching strategies in order:
             # 1) Service name contains PR number (common for preview names)
@@ -83,8 +86,10 @@ jobs:
               echo "Found service: $service_name ($service_id) with URL: $preview_url"
               break
             fi
-            echo "No matching service yet. Sleeping $SLEEP_SECS seconds..."
-            sleep $SLEEP_SECS
+            # Sleep using the configured interval for this iteration
+            sleep_secs=${intervals[$idx]}
+            echo "No matching service yet. Sleeping ${sleep_secs} seconds..."
+            sleep $sleep_secs
           done
 
           if [ "$found" = "true" ]; then

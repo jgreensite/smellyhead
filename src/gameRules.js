@@ -52,9 +52,36 @@ const gameRules = {
     },
     
     postPlayPowers: function(playedCard){
-        let topCard = getTopCard();
-        let secondCard = getSecondCard();
-        
+        // Determine topCard and secondCard robustly.
+        // There are three scenarios we need to handle:
+        // 1) postPlayPowers() called with no playedCard: use the current discard top and second card.
+        // 2) called with playedCard that has NOT yet been pushed to discard: treat playedCard as top, and previous discard top as secondCard.
+        // 3) called with playedCard that HAS already been pushed to discard (common in tests): use current top and second card from discard.
+        let topCard;
+        let secondCard;
+        const currentTop = getTopCard();
+        // If playedCard is provided
+        if (playedCard) {
+            // If the current discard top is the same object as playedCard (already pushed), use discard-based top/second
+            if (currentTop && currentTop === playedCard) {
+                topCard = currentTop;
+                secondCard = getSecondCard();
+            } else {
+                // playedCard provided but not yet in discard: playedCard is the top, and the previous top (if any) is the secondCard
+                topCard = playedCard;
+                secondCard = currentTop || null;
+            }
+        } else {
+            // No playedCard provided: derive from discard
+            topCard = currentTop;
+            secondCard = getSecondCard();
+        }
+
+        if (!topCard) {
+            // Nothing to apply
+            return;
+        }
+
         // Reset rule flags to defaults
         gameState.even = null; // no parity requirement
         gameState.lowerthan = null; // must play higher than or equal to top card

@@ -14,6 +14,31 @@ jobs:
         node-version: [18]
     steps:
       - uses: actions/checkout@v4
+      - name: Secret scan (fail on likely secrets in changed files)
+        run: |
+          set -e
+          # Check only files changed in this PR (or all files on push)
+          if [ -n "${{ github.event.pull_request }}" ]; then
+            git fetch origin main:main || true
+            files=$(git diff --name-only origin/main...HEAD)
+          else
+            files=$(git ls-files)
+          fi
+          echo "Scanning files for probable secrets: $files"
+          patterns=("ghp_[A-Za-z0-9_]+" "github_pat_[A-Za-z0-9_]+" "RENDER_API_KEY" "AKIA[0-9A-Z]{16}" "-----BEGIN PRIVATE KEY-----")
+          failures=0
+          for f in $files; do
+            for p in "${patterns[@]}"; do
+              if grep -E -n "$p" "$f" >/dev/null 2>&1; then
+                echo "Potential secret found in $f (pattern: $p). Please remove secrets from the repo and use Actions secrets." >&2
+                failures=$((failures+1))
+              fi
+            done
+          done
+          if [ $failures -gt 0 ]; then
+            echo "$failures potential secret(s) found. Failing build." >&2
+            exit 1
+          fi
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:

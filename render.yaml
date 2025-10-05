@@ -4,13 +4,13 @@ services:
     env: node
     plan: free
     branch: main
-  buildCommand: npm ci
-  startCommand: npm start
+    buildCommand: npm install
+    startCommand: node server.js
 
   - type: web
     name: smellyhead-test
     env: node
     plan: free
     branch: feature/ui-improvements
-  buildCommand: npm ci
-  startCommand: npm start
+    buildCommand: npm install
+    startCommand: node server.js
