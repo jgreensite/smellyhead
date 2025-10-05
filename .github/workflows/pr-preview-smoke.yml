@@ -128,6 +128,7 @@ jobs:
           curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments" -d "$payload" >/dev/null || true
 
       - name: Run smoke test against preview URL (retry until 200)
+        id: smoke_test
         if: steps.find_service.outputs.service_found == 'true' && steps.find_service.outputs.preview_url != ''
         env:
           PREVIEW_URL: ${{ steps.find_service.outputs.preview_url }}
@@ -153,6 +154,31 @@ jobs:
             echo "Preview smoke test failed after $MAX_RETRIES attempts"
             exit 1
           fi
+
+      - name: Publish PR Preview Smoke Test check run (pass/fail)
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const outcome = '${{ steps.smoke_test.outcome }}';
+            const headSha = (context.payload.pull_request && context.payload.pull_request.head && context.payload.pull_request.head.sha) || context.sha;
+            const conclusion = outcome === 'success' ? 'success' : 'failure';
+            const title = 'PR Preview Smoke Test';
+            const summary = outcome === 'success' ? 'Preview smoke test passed' : 'Preview smoke test failed';
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: title,
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: conclusion,
+              output: {
+                title: title,
+                summary: summary,
+                text: `Outcome: ${outcome}`
+              }
+            });
 
       - name: No preview found (info)
         if: steps.find_service.outputs.service_found != 'true'
