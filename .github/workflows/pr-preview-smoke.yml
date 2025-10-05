@@ -44,9 +44,17 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           BRANCH: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.number }}
         run: |
           set -euo pipefail
-          echo "Looking up Render services for branch: $BRANCH"
+          # If the Render API key is not available (for example, PR from a fork), post an informational note and exit.
+          if [ -z "${RENDER_API_KEY:-}" ]; then
+            echo "RENDER_API_KEY is not available in this workflow (likely a forked PR)."
+            echo "service_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Looking up Render services for branch: $BRANCH (PR #$PR_NUMBER)"
           MAX_ATTEMPTS=12
           SLEEP_SECS=10
           attempt=0
@@ -58,7 +66,15 @@ jobs:
             attempt=$((attempt+1))
             echo "Attempt $attempt/$MAX_ATTEMPTS: querying Render services..."
             services=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" https://api.render.com/v1/services)
-            match=$(echo "$services" | jq -r --arg BRANCH "$BRANCH" '.[] | select(.branch == $BRANCH) | {id: .id, name: .name, branch: .branch, url: (.serviceDetails.url // .serviceDetails.defaultDomain // .serviceDetails.defaultIngress // .url // .defaultDomain // .externalUrl // .service_url // empty)}' | jq -s '.[0]') || true
+            # Try multiple matching strategies in order:
+            # 1) Service name contains PR number (common for preview names)
+            # 2) Branch matches exactly
+            # 3) Service url or name contains branch name
+            match=$(echo "$services" | jq -r --arg PR "$PR_NUMBER" --arg BRANCH "$BRANCH" '
+              (.[ ] | select(.name | test("pr[-_ ]?" + $PR; "i"))) as $byPr |
+              (.[ ] | select(.branch == $BRANCH)) as $byBranch |
+              (.[ ] | select((.name // "" | test($BRANCH; "i")) or (.serviceDetails.url // "" | test($BRANCH; "i")))) as $byName |
+              [$byPr, $byBranch, $byName] | map(select(. != null)) | .[0] | {id: .id, name: .name, branch: .branch, url: (.serviceDetails.url // .serviceDetails.defaultDomain // .serviceDetails.defaultIngress // .url // .defaultDomain // .externalUrl // .service_url // empty)}' | jq -s '.[0]') || true
             if [ -n "$match" ] && [ "$match" != "null" ]; then
               found="true"
               service_id=$(echo "$match" | jq -r '.id') || true
@@ -82,18 +98,34 @@ jobs:
             echo "$services" | jq -C '.[] | {id: .id, name: .name, branch: .branch}' || true
           fi
 
-      - name: Post preview URL to PR
+      - name: RENDER_API_KEY missing notice (fork-safe)
+        if: ${{ env.RENDER_API_KEY == '' }}
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # If this run cannot access RENDER_API_KEY (common for fork PRs), post a note to the PR explaining why we couldn't fetch the preview URL
+          TITLE="Render preview lookup skipped"
+          BODY="This workflow couldn't access the Render API key in this run (likely because this PR is from a fork). As a result, the preview service lookup and smoke test were skipped. If you need a preview, please trigger the preview from the base repo or ask an admin to run the workflow."
+          OWNER=$(jq -r .pull_request.head.repo.owner.login "$GITHUB_EVENT_PATH" 2>/dev/null || echo "${{ github.repository_owner }}")
+          REPO=$(jq -r .pull_request.head.repo.name "$GITHUB_EVENT_PATH" 2>/dev/null || echo "${{ github.event.repository.name }}")
+          PR=${PR_NUMBER}
+          payload=$(jq -n --arg body "$BODY" '{body: $body}')
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR}/comments" -d "$payload" || true
+
+      - name: Post preview URL to PR (post to head repo for forked PRs)
         if: steps.find_service.outputs.service_found == 'true' && steps.find_service.outputs.preview_url != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ github.event.number }}
           URL=${{ steps.find_service.outputs.preview_url }}
-          OWNER=${{ github.repository_owner }}
-          REPO=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          echo "Posting preview URL to PR #$PR_NUMBER: $URL"
+          # Determine the correct repo to post to: use pull_request.head.repo if available (handles forks)
+          OWNER=$(jq -r .pull_request.head.repo.owner.login "$GITHUB_EVENT_PATH" 2>/dev/null || echo "${{ github.repository_owner }}")
+          REPO=$(jq -r .pull_request.head.repo.name "$GITHUB_EVENT_PATH" 2>/dev/null || echo "${{ github.event.repository.name }}")
+          PR_NUMBER=$(jq -r .pull_request.number "$GITHUB_EVENT_PATH" 2>/dev/null || echo "${{ github.event.number }}")
+          echo "Posting preview URL to ${OWNER}/${REPO} PR #${PR_NUMBER}: $URL"
           payload=$(jq -n --arg body "Render preview: $URL" '{body: $body}')
-          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments" -d "$payload" >/dev/null
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST "https://api.github.com/repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments" -d "$payload" >/dev/null || true
 
       - name: Run smoke test against preview URL (retry until 200)
         if: steps.find_service.outputs.service_found == 'true' && steps.find_service.outputs.preview_url != ''
