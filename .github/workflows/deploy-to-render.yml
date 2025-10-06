@@ -11,6 +11,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check Render secrets presence (debug)
+        run: |
+          # Don't print secret values. Only indicate presence/absence.
+          if [ -n "${{ secrets.RENDER_API_KEY }}" ]; then echo "RENDER_API_KEY: present"; else echo "RENDER_API_KEY: missing"; fi
+          if [ -n "${{ secrets.RENDER_SERVICE_ID_TEST }}" ]; then echo "RENDER_SERVICE_ID_TEST: present"; else echo "RENDER_SERVICE_ID_TEST: missing"; fi
+          if [ -n "${{ secrets.RENDER_SERVICE_ID_PROD }}" ]; then echo "RENDER_SERVICE_ID_PROD: present"; else echo "RENDER_SERVICE_ID_PROD: missing"; fi
+
       - name: Trigger Render deploy (repo-level)
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
