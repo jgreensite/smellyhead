@@ -1,0 +1,108 @@
+name: Create CI/CD issues
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create_issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create CI/CD labels and issues (idempotent)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          api() {
+            curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com$1"
+          }
+
+          create_label() {
+            name="$1"; color="$2"; desc="$3"
+            echo "Creating label: $name"
+            curl -s -X POST -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+              -d "{\"name\": \"${name}\", \"color\": \"${color}\", \"description\": \"${desc}\"}" \
+              "https://api.github.com/repos/${REPO}/labels" | jq -r '.message // .name' || true
+          }
+
+          label_list() {
+            api "/repos/${REPO}/labels" | jq -r '.[].name'
+          }
+
+          issue_exists() {
+            title="$1"
+            api "/repos/${REPO}/issues?state=open&per_page=100" | jq -r ".[] | select(.title==\"${title}\") | .number" | head -n1
+          }
+
+          create_issue() {
+            title="$1"; body="$2"; labels_json="$3"
+            if [ -n "$(issue_exists "$title")" ]; then
+              echo "Issue exists: $title"
+              return 0
+            fi
+            echo "Creating issue: $title"
+            curl -s -X POST -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+              -d "{\"title\": \"${title}\", \"body\": \"${body//"/\"}\", \"labels\": ${labels_json}}" \
+              "https://api.github.com/repos/${REPO}/issues" | jq -r '.html_url'
+          }
+
+          # Create labels
+          create_label "CI/CD" "0e8a16" "CI and deployment work"
+          create_label "deploy" "5319e7" "Deployment related tasks"
+          create_label "infra" "5319e7" "Infrastructure and hosting"
+          create_label "uat" "fbca04" "User acceptance testing tasks"
+          create_label "preview" "c2e0c6" "PR preview related"
+          create_label "needs-investigation" "f9d0c4" "Needs investigation"
+          create_label "documentation" "0e8a16" "Documentation and runbooks"
+          create_label "bug" "b60205" "Bug"
+          create_label "enhancement" "a2eeef" "Enhancement"
+
+          # Issue bodies (keep simple, escaped)
+          BODY1=$(cat <<'EOF'
+Motivation: Avoid maintaining a repo-level test service ID by discovering PR preview services dynamically using the Render API.
+
+Acceptance criteria:
+- Workflows can find the preview service ID and URL for a PR/branch.
+- Deploy and preview workflows no longer require the RENDER_SERVICE_ID_TEST secret.
+- pr-preview-smoke uploads services.json for diagnostics when discovery fails.
+
+Implementation notes:
+- Query Render API /v1/services and match by branch/PR or service name pattern.
+- Add safe fallbacks and caching to avoid rate limits.
+- Update pr-preview-smoke.yml and deploy-to-render.yml to use discovery and add tests.
+EOF
+)
+
+          BODY2=$(cat <<'EOF'
+Create a dedicated Render test environment for UAT that mirrors production as closely as feasible.
+
+Acceptance criteria:
+- A Render service `smellyhead-test` exists with branch main auto-deploy enabled.
+- Node build/start commands set to `npm ci && npm run build --if-present` and `npm start`.
+- Health check configured and env vars mirrored from prod but pointing to test resources.
+- Document exact UI fields and env var names in `docs/RENDER_SETUP.md`.
+EOF
+)
+
+          BODY3=$(cat <<'EOF'
+Add a workflow that runs full end-to-end/UAT tests against the dedicated Render test environment when commits are pushed to main.
+
+Acceptance criteria:
+- Workflow triggers on push to main.
+- Workflow discovers the test service URL via Render API (or uses RENDER_SERVICE_ID_TEST).
+- Runs long-running E2E/UAT test suite and uploads artifacts on failure.
+- Optionally gates production deploy using GitHub Environments approvals.
+EOF
+)
+
+          # Create issues idempotently
+          create_issue "Implement dynamic Render preview discovery and remove RENDER_SERVICE_ID_TEST dependency" "$BODY1" '["CI/CD","preview","infra"]'
+          create_issue "Create Render test environment and document settings" "$BODY2" '["CI/CD","infra","documentation"]'
+          create_issue "Add UAT workflow to run full E2E tests on test environment after merge to main" "$BODY3" '["CI/CD","uat"]'
+
+          echo "Done"
