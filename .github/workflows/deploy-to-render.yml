@@ -8,46 +8,80 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  # Deploy to Test environment (run when main is updated -> UAT)
+  deploy-test:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: Test
     steps:
       - name: Check Render secrets presence (debug)
         run: |
           # Don't print secret values. Only indicate presence/absence.
           if [ -n "${{ secrets.RENDER_API_KEY }}" ]; then echo "RENDER_API_KEY: present"; else echo "RENDER_API_KEY: missing"; fi
           if [ -n "${{ secrets.RENDER_SERVICE_ID_TEST }}" ]; then echo "RENDER_SERVICE_ID_TEST: present"; else echo "RENDER_SERVICE_ID_TEST: missing"; fi
+
+      - name: Trigger Render test deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID_TEST: ${{ secrets.RENDER_SERVICE_ID_TEST }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${RENDER_SERVICE_ID_TEST:-}" ]; then
+            echo "Missing RENDER_SERVICE_ID_TEST or RENDER_API_KEY; skipping test deploy"
+            exit 0
+          fi
+          echo "Triggering test deploy for service ${RENDER_SERVICE_ID_TEST}..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID_TEST}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":true}')
+          http=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "Render response HTTP status: $http"
+          echo "Render response body: $body"
+          if [ "$http" -ge 200 ] && [ "$http" -lt 300 ]; then
+            echo "Test deploy triggered successfully"
+          else
+            echo "Render API returned non-2xx status: $http"
+            exit 1
+          fi
+
+  # Deploy to Production environment (manual / protected)
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Check Render secrets presence (debug)
+        run: |
+          # Don't print secret values. Only indicate presence/absence.
+          if [ -n "${{ secrets.RENDER_API_KEY }}" ]; then echo "RENDER_API_KEY: present"; else echo "RENDER_API_KEY: missing"; fi
           if [ -n "${{ secrets.RENDER_SERVICE_ID_PROD }}" ]; then echo "RENDER_SERVICE_ID_PROD: present"; else echo "RENDER_SERVICE_ID_PROD: missing"; fi
 
-      - name: Trigger Render deploy (repo-level)
+      - name: Trigger Render prod deploy
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID_PROD: ${{ secrets.RENDER_SERVICE_ID_PROD }}
-          RENDER_SERVICE_ID_TEST: ${{ secrets.RENDER_SERVICE_ID_TEST }}
-          GITHUB_REF: ${{ github.ref }}
         run: |
-          set -e
-          # Only deploy prod on main
-          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            if [ -z "$RENDER_SERVICE_ID_PROD" ] || [ -z "$RENDER_API_KEY" ]; then
-              echo "Missing RENDER_SERVICE_ID_PROD or RENDER_API_KEY; skipping prod deploy"
-              exit 0
-            fi
-            echo "Triggering prod deploy..."
-            curl -s -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID_PROD}/deploys" \
-              -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"clearCache":true}'
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${RENDER_SERVICE_ID_PROD:-}" ]; then
+            echo "Missing RENDER_SERVICE_ID_PROD or RENDER_API_KEY; skipping prod deploy"
+            exit 0
+          fi
+          echo "Triggering prod deploy for service ${RENDER_SERVICE_ID_PROD}..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID_PROD}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":true}')
+          http=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "Render response HTTP status: $http"
+          echo "Render response body: $body"
+          if [ "$http" -ge 200 ] && [ "$http" -lt 300 ]; then
+            echo "Prod deploy triggered successfully"
           else
-            # For other branches, attempt to trigger test service
-            if [ -z "$RENDER_SERVICE_ID_TEST" ] || [ -z "$RENDER_API_KEY" ]; then
-              echo "Missing RENDER_SERVICE_ID_TEST or RENDER_API_KEY; skipping test deploy"
-              exit 0
-            fi
-            echo "Triggering test deploy..."
-            curl -s -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID_TEST}/deploys" \
-              -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"clearCache":true}'
+            echo "Render API returned non-2xx status: $http"
+            exit 1
           fi
 
-      # end of deploy steps
+# ...end of file

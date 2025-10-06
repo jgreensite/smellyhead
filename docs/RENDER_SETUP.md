@@ -23,6 +23,24 @@ Steps:
    - The repo contains `.github/workflows/deploy-to-render.yml`. It triggers on pushes to `main` (prod) and other branches (test).
    - The Render services are defined in `render.yaml` and configured to use `npm ci` for builds.
 
+Recommended build and start commands for parity across environments
+
+- If your Render service has separate Install and Build fields (preferred):
+  - Install command: npm ci
+  - Build command: npm run build --if-present
+  - Start command: npm start
+
+- If Render only exposes a single Build field for your environment, use:
+  - Build command: npm ci && npm run build --if-present
+  - Start command: npm start
+
+Why:
+- `npm ci` installs deterministically from package-lock.json and is the same command used by CI.
+- `npm run build --if-present` runs your build step if you have one; it keeps parity with production builds without failing when no build script exists.
+
+CI mirroring:
+- The GitHub Actions CI workflow now runs `npm ci && npm run build --if-present` in a dedicated build validation step so the CI build matches Render's build process.
+
 Notes and recommended values
  - Prefer `npm ci` in CI and Render builds for deterministic installs (this repo now uses `npm ci` in `render.yaml`).
  - Keep Render auto-deploy enabled if you want Render to deploy on push directly. The workflow provided is optional and triggers Render via API.
