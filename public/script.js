@@ -46,9 +46,36 @@ window.onload = function() {
         updateTurnIndicator(false, currentPlayerName);
     });
 
+    socket.on('playError', function(errorMsg) {
+        const errEl = document.getElementById('errorMessage');
+        errEl.textContent = errorMsg;
+        setTimeout(() => errEl.textContent = '', 3000);
+    });
+
+    socket.on('playMessage', function(msg) {
+        const errEl = document.getElementById('errorMessage');
+        errEl.textContent = msg;
+        errEl.style.color = 'blue';
+        setTimeout(() => {
+            errEl.textContent = '';
+            errEl.style.color = 'red';
+        }, 3000);
+    });
+
+    socket.on('gameOver', function(data) {
+        document.getElementById('gameContainer').style.display = 'none';
+        document.getElementById('gameOverContainer').style.display = 'block';
+        document.getElementById('winnerText').textContent = `Winner: ${data.winner}`;
+    });
+
     // Draw card button
     document.getElementById('drawCardButton').addEventListener('click', function() {
         socket.emit('drawCard');
+    });
+
+    // Pick up pile button
+    document.getElementById('pickUpPileButton').addEventListener('click', function() {
+        socket.emit('pickUpPile');
     });
 };
 
@@ -62,17 +89,21 @@ function updateGameUI(newGameState) {
     // Update interactive card displays
     updateHandCards();
     updateFaceUpCards();
+    updateFaceDownCards();
     updateGameStateInfo();
 }
 
 function updateTurnIndicator(isMyTurn, currentPlayerName = '') {
     const indicator = document.getElementById('turnIndicator');
+    const pickUpBtn = document.getElementById('pickUpPileButton');
     if (isMyTurn) {
         indicator.textContent = 'Your Turn!';
         indicator.className = 'yourTurn';
+        pickUpBtn.style.display = 'inline-block';
     } else {
         indicator.textContent = currentPlayerName ? `${currentPlayerName}'s Turn` : "Waiting for turn...";
         indicator.className = 'notYourTurn';
+        pickUpBtn.style.display = 'none';
     }
 }
 
@@ -96,6 +127,26 @@ function updateFaceUpCards() {
         gameState.faceUpCards.forEach((card, index) => {
             const cardElement = createCardElement(card, index, 'faceUp');
             faceUpContainer.appendChild(cardElement);
+        });
+    }
+}
+
+function updateFaceDownCards() {
+    const faceDownContainer = document.getElementById('faceDownCards');
+    faceDownContainer.innerHTML = '<h3>Your Face-Down Cards</h3>';
+
+    if (gameState && gameState.faceDownCards) {
+        gameState.faceDownCards.forEach((card, index) => {
+            // We do not know the card values for face down, just render a hidden block
+            const cardElement = document.createElement('div');
+            cardElement.className = 'card faceDown';
+            cardElement.textContent = '🂠';
+            cardElement.dataset.index = index;
+            cardElement.dataset.type = 'faceDown';
+            cardElement.addEventListener('click', function() {
+                selectCard(this, card, index, 'faceDown');
+            });
+            faceDownContainer.appendChild(cardElement);
         });
     }
 }

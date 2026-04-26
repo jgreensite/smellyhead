@@ -165,12 +165,13 @@ describe('playCard', () => {
         changeGameState.waitingForPlayers.addPlayer(socketId);
         const player = changeGameState.waitingForPlayers.getPlayer(socketId);
         player.hand = [card];
-        changeGameState.gameInProgress.prePlayCard(player, card);
+        const result = changeGameState.gameInProgress.prePlayCard(player, card);
+        expect(result.error).toBeDefined();
         expect(gameState.discardPile.includes(card)).toBe(false);
-        expect(gameState.discardPile).toHaveLength(0);
-        expect(player.hand.includes(topCard)).toBe(true);
+        expect(gameState.discardPile).toHaveLength(1);
+        expect(gameState.discardPile[0]).toEqual(topCard);
         expect(player.hand.includes(card)).toBe(true);
-        expect(player.hand).toHaveLength(2); // original card + picked up card
+        expect(player.hand).toHaveLength(1);
     });
 });
 

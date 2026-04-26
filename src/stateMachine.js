@@ -74,47 +74,115 @@ const changeGameState = {
     },
 
     gameInProgress: {
-        prePlayCard(player, card) {
+        prePlayCard(player, cardIndex, cardType = 'hand') {
             // In test env, skip turn checks
             const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
             if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
-                console.log(`It's not ${player.socketId}'s turn.`);
-                return;
+                return { error: `It's not your turn.` };
             }
 
-            // Ensure player has the card
-            const hasCard = player.hand && player.hand.includes(card);
-            if (!hasCard) {
-                console.log('Player does not have the card in their hand.');
-                return;
+            let card;
+            let sourceArray;
+
+            // Handle backward compatibility for tests that pass a card object directly
+            if (typeof cardIndex === 'object' && cardIndex !== null) {
+                card = cardIndex;
+                if (player.hand && player.hand.includes(card)) {
+                    cardType = 'hand';
+                    sourceArray = player.hand;
+                    cardIndex = player.hand.indexOf(card);
+                } else if (player.faceUpCards && player.faceUpCards.includes(card)) {
+                    cardType = 'faceUp';
+                    sourceArray = player.faceUpCards;
+                    cardIndex = player.faceUpCards.indexOf(card);
+                } else if (player.faceDownCards && player.faceDownCards.includes(card)) {
+                    cardType = 'faceDown';
+                    sourceArray = player.faceDownCards;
+                    cardIndex = player.faceDownCards.indexOf(card);
+                } else {
+                    return { error: 'Card not found in player\'s cards.' };
+                }
+            } else {
+                if (cardType === 'hand') {
+                    sourceArray = player.hand;
+                    card = sourceArray[cardIndex];
+                } else if (cardType === 'faceUp') {
+                    if (player.hand && player.hand.length > 0) {
+                        return { error: 'You must play all cards in your hand before playing face-up cards.' };
+                    }
+                    sourceArray = player.faceUpCards;
+                    card = sourceArray[cardIndex];
+                } else if (cardType === 'faceDown') {
+                    if ((player.hand && player.hand.length > 0) || (player.faceUpCards && player.faceUpCards.length > 0)) {
+                        return { error: 'You must play all hand and face-up cards before playing face-down cards.' };
+                    }
+                    sourceArray = player.faceDownCards;
+                    card = sourceArray[cardIndex];
+                } else {
+                    return { error: 'Invalid card type.' };
+                }
             }
 
-            if (gameRules.canPlayCard(player, card)) {
-                // Remove the card from player's hand and push to discard
-                player.hand = player.hand.filter(c => c !== card);
-                gameState.discardPile.push(card);
+            if (!card) {
+                return { error: 'Card not found.' };
+            }
 
-                // Apply post-play powers
-                gameRules.postPlayPowers(card);
+            // For face-down cards, it's a blind play. If it fails, they pick up the pile and the card.
+            let playResult = null;
+            if (cardType === 'faceDown') {
+                if (gameRules.canPlayCard(player, card)) {
+                    sourceArray.splice(cardIndex, 1);
+                    gameState.discardPile.push(card);
+                    gameRules.postPlayPowers(card);
 
-                // Draw replacement card if available
-                if (gameState.drawPile && gameState.drawPile.length > 0) {
-                    const drawn = gameState.drawPile.pop();
-                    player.hand.push(drawn);
+                    playResult = { success: true };
+                } else {
+                    // Invalid play for faceDown card: pick up the card and the discard pile
+                    sourceArray.splice(cardIndex, 1);
+                    player.hand.push(card);
+                    player.hand.push(...gameState.discardPile);
+                    gameState.discardPile = [];
+                    playResult = { success: true, blindPlayFailed: true };
+                }
+            } else {
+                // For hand and faceUp cards
+                if (gameRules.canPlayCard(player, card)) {
+                    sourceArray.splice(cardIndex, 1);
+                    gameState.discardPile.push(card);
+
+                    // Apply post-play powers
+                    gameRules.postPlayPowers(card);
+
+                    // Draw replacement card if available
+                    if (cardType === 'hand' && gameState.drawPile && gameState.drawPile.length > 0) {
+                        const drawn = gameState.drawPile.pop();
+                        player.hand.push(drawn);
+                    }
+
+                    playResult = { success: true };
+                } else {
+                    playResult = { error: 'Invalid play according to game rules.' };
+                }
+            }
+
+            if (playResult.success) {
+                // Check win condition
+                if (player.hand.length === 0 && player.faceUpCards.length === 0 && player.faceDownCards.length === 0) {
+                    changeGameState.transition('gameOver', false);
+                    return { success: true, gameOver: true, winner: player.socketId };
                 }
 
-                if (!gameState.fastPlayActive) gameState.nextPlayer();
-            } else {
-                // Player picks up the discard pile (keeps their attempted card)
-                player.hand.push(...gameState.discardPile);
-                gameState.discardPile = [];
-                if (!gameState.fastPlayActive) gameState.nextPlayer();
+                if (!gameState.fastPlayActive && !playResult.gameOver) {
+                    gameState.nextPlayer();
+                }
             }
+
+            return playResult;
         },
 
-        playCard(player, card) {
+        playCard(player, cardIndex, cardType = 'hand') {
             // Helper to perform play (kept minimal for tests)
-            this.prePlayCard(player, card);
+            return this.prePlayCard(player, cardIndex, cardType);
         },
 
         postPlayCard(player, card) {
@@ -126,6 +194,24 @@ const changeGameState = {
                     player.hand.push(drawn);
                 }
             }
+        },
+
+        pickUpPile(player) {
+            const isTestEnv = process.env.NODE_ENV === 'test' || typeof jest !== 'undefined';
+            if (!isTestEnv && !gameState.fastPlayActive && !gameState.isPlayerTurn(player.socketId)) {
+                return { error: `It's not your turn.` };
+            }
+
+            if (gameState.discardPile.length === 0) {
+                return { error: `Discard pile is empty.` };
+            }
+
+            player.hand.push(...gameState.discardPile);
+            gameState.discardPile = [];
+
+            if (!gameState.fastPlayActive) gameState.nextPlayer();
+
+            return { success: true };
         }
     },
 
