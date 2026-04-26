@@ -114,7 +114,7 @@ describe('startGame', () => {
         changeGameState.waitingForPlayers.addPlayer(socketId1);
         changeGameState.waitingForPlayers.addPlayer(socketId2);
         changeGameState.waitingForPlayers.startGame(socketId1);
-        expect(gameState.currentState).toEqual('setupGame');
+        expect(gameState.currentState).toEqual('gameInProgress');
     });
 });
 
@@ -125,7 +125,7 @@ describe('initialize', () => {
         changeGameState.waitingForPlayers.addPlayer(socketId1);
         changeGameState.waitingForPlayers.addPlayer(socketId2);
         changeGameState.transition('setupGame');
-        expect(gameState.currentState).toEqual('setupGame');
+        expect(gameState.currentState).toEqual('gameInProgress');
         expect(gameState.players[0].faceDownCards).toHaveLength(3);
         expect(gameState.players[0].faceUpCards).toHaveLength(3);
         expect(gameState.players[0].hand).toHaveLength(3);

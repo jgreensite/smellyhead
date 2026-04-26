@@ -93,50 +93,16 @@ io.on('connection', (socket) => {
         const oldState = gameState.currentState;
         changeGameState.waitingForPlayers.startGame(socket.id);
         
-        // If game actually entered setupGame state, notify all players
-        if (oldState !== gameState.currentState && gameState.currentState === 'setupGame') {
-            // Send initial setup state to all players
+        // If game actually started, notify all players
+        if (oldState !== gameState.currentState && gameState.currentState === 'gameInProgress') {
+            // Send initial game state to all players
             gameState.players.forEach(player => {
                 const playerState = getPlayerGameState(player.socketId);
-                io.to(player.socketId).emit('setupStarted', playerState);
+                io.to(player.socketId).emit('gameStarted', playerState);
             });
-        }
-    });
 
-    socket.on('swapCards', (data) => {
-        const player = gameState.players.find(p => p.socketId === socket.id);
-        if (!player) return;
-
-        if (gameState.currentState !== 'setupGame') {
-            socket.emit('playError', 'Cannot swap cards now.');
-            return;
-        }
-
-        const result = changeGameState.setupGame.swapCards(player, data.handIndex, data.faceUpIndex);
-        if (result.error) {
-            socket.emit('playError', result.error);
-        } else {
-            broadcastGameState(); // Refresh UI for the player
-        }
-    });
-
-    socket.on('setReady', () => {
-        const player = gameState.players.find(p => p.socketId === socket.id);
-        if (!player) return;
-
-        if (gameState.currentState !== 'setupGame') return;
-
-        const result = changeGameState.setupGame.setReady(player);
-        if (result.allReady) {
-            // Everyone is ready, game is now in progress
-            gameState.players.forEach(p => {
-                const playerState = getPlayerGameState(p.socketId);
-                io.to(p.socketId).emit('gameStarted', playerState);
-            });
+            // Notify about initial turn
             notifyTurns();
-        } else {
-            // Just update UI to show this player is ready (optional, but good for feedback)
-            socket.emit('playMessage', 'You are ready. Waiting for others...');
         }
     });
 
@@ -151,36 +117,16 @@ io.on('connection', (socket) => {
         
         // Use default 'hand' if not provided
         const cardType = data.cardType || 'hand';
-        const cardIndices = data.cardIndices !== undefined ? data.cardIndices : data.cardIndex;
+        const cardIndex = data.cardIndex;
         
-        if (cardIndices === undefined || cardIndices === null || (Array.isArray(cardIndices) && cardIndices.length === 0)) {
+        if (cardIndex === undefined || cardIndex === null) {
             socket.emit('error', 'Card index not provided');
             return;
         }
 
-        // Prompt for suit if it's a Joker (and no suit was provided)
-        // Check if any of the requested cards is a Joker
-        let sourceArray = cardType === 'hand' ? player.hand : (cardType === 'faceUp' ? player.faceUpCards : player.faceDownCards);
-        let indicesArray = Array.isArray(cardIndices) ? cardIndices : [cardIndices];
+        // Attempt to play the card
+        const result = changeGameState.gameInProgress.prePlayCard(player, cardIndex, cardType);
 
-        let hasJoker = false;
-        for (let idx of indicesArray) {
-            if (sourceArray[idx] && sourceArray[idx].value === 'Joker') {
-                hasJoker = true;
-                if (!data.suit) {
-                    // Tell client they need to pick a suit
-                    socket.emit('playError', 'Please select a suit for the Joker.');
-                    socket.emit('requestSuitSelection');
-                    return;
-                }
-                // Apply the suit to the card before playing
-                sourceArray[idx].suit = data.suit;
-            }
-        }
-
-        // Attempt to play the card(s)
-        const result = changeGameState.gameInProgress.prePlayCard(player, cardIndices, cardType);
-        
         if (result && result.error) {
             socket.emit('playError', result.error);
             return;
@@ -245,19 +191,6 @@ io.on('connection', (socket) => {
 
         // Notify about turn changes
         notifyTurns();
-    });
-
-    socket.on('playAgain', () => {
-        console.debug(`Player ${socket.id} wants to play again`);
-
-        // Only allow reset if game is over
-        if (gameState.currentState === 'gameOver') {
-            changeGameState.transition('waitingForPlayers', false);
-            // Notify everyone to go back to lobby
-            io.emit('resetGame');
-        } else {
-            socket.emit('error', 'Cannot play again unless the game is over.');
-        }
     });
 });
 

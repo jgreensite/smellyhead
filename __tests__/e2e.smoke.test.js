@@ -46,13 +46,6 @@ describe('E2E smoke', () => {
       }
     }
 
-    client1.on('setupStarted', () => {
-        client1.emit('setReady');
-    });
-    client2.on('setupStarted', () => {
-        client2.emit('setReady');
-    });
-
     client1.on('gameStarted', (state) => {
       expect(state).toBeDefined();
       onGameStarted();

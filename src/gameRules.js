@@ -1,5 +1,4 @@
-const { gameState } = require('./gameState');
-const gameConfig = require('./gameConfig');
+const { gameState, clearDiscardPile } = require('./gameState');
 
 function getTopCard() {
     return gameState.discardPile[gameState.discardPile.length - 1];
@@ -19,12 +18,6 @@ const gameRules = {
         let topCard = getTopCard();
         // If the discard pile is empty, any card can be played
         if (!topCard) {
-            return true;
-        }
-
-        // Check if card has a config property that allows it to bypass rules
-        const cardConfig = gameConfig.specialCards[card.value];
-        if (cardConfig && cardConfig.canPlayOnAnything) {
             return true;
         }
 
@@ -141,19 +134,9 @@ const gameRules = {
                 gameState.fastPlayActive = true;
             }
         }
-    }
-};
+    },
 
-function clearDiscardPile() {
-    // Check if the discard pile is not already empty
-    if (gameState.discardPile.length === 0) {
-        console.debug('Discard pile is already empty.');
-        return;
-    }
-    // Move all cards from the discard pile to the graveyard pile
-    gameState.graveyardPile.push(...gameState.discardPile);
-    // Clear the discard pile
-    gameState.discardPile = [];
-}
+    clearDiscardPile: clearDiscardPile
+};
 
 module.exports = gameRules;

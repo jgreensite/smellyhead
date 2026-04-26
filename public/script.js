@@ -2,11 +2,7 @@
 let socket;
 let gameState = null;
 let mySocketId = null;
-let selectedCards = []; // Array to support multiple card selection
-
-// Track swapping state
-let swapSelection = { handIndex: null, faceUpIndex: null };
-let isSetupPhase = false;
+let selectedCard = null;
 
 window.onload = function() {
     socket = io.connect('http://localhost:3000');
@@ -29,29 +25,10 @@ window.onload = function() {
         socket.emit('startGame');
     });
 
-    // Setup Phase Started
-    socket.on('setupStarted', function(initialGameState) {
-        isSetupPhase = true;
-        document.getElementById('lobby').style.display = 'none';
-        document.getElementById('gameContainer').style.display = 'block';
-        document.getElementById('readyButton').style.display = 'inline-block';
-        document.getElementById('turnIndicator').textContent = 'Setup Phase: Swap your hand and face-up cards if you want.';
-        updateGameUI(initialGameState);
-    });
-
     // Game started - show game UI
     socket.on('gameStarted', function(initialGameState) {
-        isSetupPhase = false;
         document.getElementById('lobby').style.display = 'none';
         document.getElementById('gameContainer').style.display = 'block';
-        document.getElementById('readyButton').style.display = 'none';
-
-        // Reset selections
-        selectedCards = [];
-        swapSelection = { handIndex: null, faceUpIndex: null };
-        document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
-        document.getElementById('playSelectedButton').style.display = 'none';
-
         updateGameUI(initialGameState);
     });
 
@@ -91,38 +68,6 @@ window.onload = function() {
         document.getElementById('winnerText').textContent = `Winner: ${data.winner}`;
     });
 
-    socket.on('resetGame', function() {
-        document.getElementById('gameOverContainer').style.display = 'none';
-        document.getElementById('lobby').style.display = 'block';
-        document.getElementById('gameContainer').style.display = 'none';
-        gameState = null;
-        selectedCards = [];
-        swapSelection = { handIndex: null, faceUpIndex: null };
-        document.getElementById('gameArea').textContent = '';
-        document.getElementById('handCards').innerHTML = '';
-        document.getElementById('faceUpCards').innerHTML = '';
-        document.getElementById('faceDownCards').innerHTML = '';
-        document.getElementById('gameState').innerHTML = '';
-    });
-
-    socket.on('requestSuitSelection', function() {
-        document.getElementById('suitSelectionOverlay').style.display = 'block';
-    });
-
-    // Suit selection buttons
-    document.querySelectorAll('.suitButton').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const chosenSuit = this.dataset.suit;
-            document.getElementById('suitSelectionOverlay').style.display = 'none';
-            // Play selected cards with the chosen suit
-            playSelectedCards(chosenSuit);
-        });
-    });
-
-    document.getElementById('cancelSuitSelection').addEventListener('click', function() {
-        document.getElementById('suitSelectionOverlay').style.display = 'none';
-    });
-
     // Draw card button
     document.getElementById('drawCardButton').addEventListener('click', function() {
         socket.emit('drawCard');
@@ -131,22 +76,6 @@ window.onload = function() {
     // Pick up pile button
     document.getElementById('pickUpPileButton').addEventListener('click', function() {
         socket.emit('pickUpPile');
-    });
-
-    // Ready button
-    document.getElementById('readyButton').addEventListener('click', function() {
-        document.getElementById('readyButton').style.display = 'none';
-        socket.emit('setReady');
-    });
-
-    // Play Selected button
-    document.getElementById('playSelectedButton').addEventListener('click', function() {
-        playSelectedCards();
-    });
-
-    // Play Again button
-    document.getElementById('playAgainButton').addEventListener('click', function() {
-        socket.emit('playAgain');
     });
 };
 
@@ -238,90 +167,35 @@ function createCardElement(card, index, type) {
 }
 
 function selectCard(cardElement, card, index, type) {
-    if (isSetupPhase) {
-        // Handle setup phase selection (swapping)
-        if (type === 'hand') {
-            document.querySelectorAll('#handCards .card.selected').forEach(el => el.classList.remove('selected'));
-            swapSelection.handIndex = index;
-            cardElement.classList.add('selected');
-        } else if (type === 'faceUp') {
-            document.querySelectorAll('#faceUpCards .card.selected').forEach(el => el.classList.remove('selected'));
-            swapSelection.faceUpIndex = index;
-            cardElement.classList.add('selected');
-        }
+    // Remove previous selection
+    document.querySelectorAll('.card.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
 
-        // If both a hand card and a faceUp card are selected, swap them
-        if (swapSelection.handIndex !== null && swapSelection.faceUpIndex !== null) {
-            socket.emit('swapCards', {
-                handIndex: swapSelection.handIndex,
-                faceUpIndex: swapSelection.faceUpIndex
-            });
-            // Reset local selection immediately for UX
-            swapSelection = { handIndex: null, faceUpIndex: null };
-            document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
-        }
-    } else {
-        // Normal game phase selection
-        if (type === 'faceDown') {
-            // Face-down cards are played blind, one at a time immediately
-            document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
-            selectedCards = [{ card, index, type }];
-            playSelectedCards();
-            return;
-        }
+    // Select this card
+    cardElement.classList.add('selected');
+    selectedCard = { card, index, type };
 
-        // Toggle selection for multiple cards of the same rank from the same zone
-        const isSelected = cardElement.classList.contains('selected');
-
-        if (isSelected) {
-            // Deselect
-            cardElement.classList.remove('selected');
-            selectedCards = selectedCards.filter(c => c.index !== index || c.type !== type);
-        } else {
-            // If selecting a new card, check if it matches the current selection's type and rank
-            if (selectedCards.length > 0) {
-                const firstSelected = selectedCards[0];
-                if (type !== firstSelected.type || card.value !== firstSelected.card.value) {
-                    // Mismatch in zone or rank: clear previous selection and select this one instead
-                    document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
-                    selectedCards = [];
-                }
-            }
-
-            cardElement.classList.add('selected');
-            selectedCards.push({ card, index, type });
-        }
-
-        // Update Play Selected button visibility
-        const playBtn = document.getElementById('playSelectedButton');
-        if (selectedCards.length > 0) {
-            playBtn.style.display = 'inline-block';
-        } else {
-            playBtn.style.display = 'none';
-        }
-    }
+    // Try to play the card
+    playSelectedCard();
 }
 
-function playSelectedCards(suitSelection = null) {
-    if (selectedCards.length === 0) return;
-
-    const cardIndices = selectedCards.map(c => c.index);
-    const cardType = selectedCards[0].type; // All selected cards must be from the same type
+function playSelectedCard() {
+    if (!selectedCard) return;
     
-    const payload = {
+    console.log('Playing card:', selectedCard);
+    socket.emit('playCard', {
         playerId: mySocketId,
-        cardIndices: cardIndices,
-        cardType: cardType,
-        suit: suitSelection
-    };
+        cardIndex: selectedCard.index,
+        cardType: selectedCard.type,
+        card: selectedCard.card
+    });
     
-    console.log('Playing cards:', payload);
-    socket.emit('playCard', payload);
-
-    // Clear selection UI immediately for responsiveness
-    selectedCards = [];
-    document.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
-    document.getElementById('playSelectedButton').style.display = 'none';
+    // Clear selection
+    selectedCard = null;
+    document.querySelectorAll('.card.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
 }
 
 function updateGameStateInfo() {
