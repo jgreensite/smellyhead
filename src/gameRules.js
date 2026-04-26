@@ -134,7 +134,9 @@ const gameRules = {
                 gameState.fastPlayActive = true;
             }
         }
-    }
+    },
+
+    clearDiscardPile: clearDiscardPile
 };
 
 module.exports = gameRules;
