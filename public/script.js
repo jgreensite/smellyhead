@@ -171,11 +171,11 @@ function selectCard(cardElement, card, index, type) {
     document.querySelectorAll('.card.selected').forEach(el => {
         el.classList.remove('selected');
     });
-    
+
     // Select this card
     cardElement.classList.add('selected');
     selectedCard = { card, index, type };
-    
+
     // Try to play the card
     playSelectedCard();
 }

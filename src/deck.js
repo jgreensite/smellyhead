@@ -11,11 +11,12 @@ class Deck {
         this.cards = [];
         const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
         const values = {'2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13,'A':14};
+        const valueEntries = Object.entries(values);
 
         for (let i = 0; i < numDecks; i++) {
             for (let suit of suits) {
-                for (let value in values) {
-                    this.cards.push(new Card(suit, value, values[value]));
+                for (let [value, numericValue] of valueEntries) {
+                    this.cards.push(new Card(suit, value, numericValue));
                 }
             }
             // Add Jokers

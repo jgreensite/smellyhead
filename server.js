@@ -100,7 +100,7 @@ io.on('connection', (socket) => {
                 const playerState = getPlayerGameState(player.socketId);
                 io.to(player.socketId).emit('gameStarted', playerState);
             });
-            
+
             // Notify about initial turn
             notifyTurns();
         }

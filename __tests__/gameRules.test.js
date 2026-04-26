@@ -206,6 +206,32 @@ describe('postPlayPowers', () => {
     });
 });
 
+describe('clearDiscardPile', () => {
+    test('handles empty discard pile correctly', () => {
+        gameState.discardPile = [];
+        gameState.graveyardPile = [];
+
+        // Should not throw and should not change graveyardPile
+        expect(() => gameRules.clearDiscardPile()).not.toThrow();
+        expect(gameState.graveyardPile).toHaveLength(0);
+        expect(gameState.discardPile).toHaveLength(0);
+    });
+
+    test('clears non-empty discard pile into graveyard', () => {
+        const card1 = { suit: 'hearts', value: '5', numericValue: 5 };
+        const card2 = { suit: 'spades', value: '6', numericValue: 6 };
+        gameState.discardPile = [card1, card2];
+        gameState.graveyardPile = [];
+
+        gameRules.clearDiscardPile();
+
+        expect(gameState.discardPile).toHaveLength(0);
+        expect(gameState.graveyardPile).toHaveLength(2);
+        expect(gameState.graveyardPile).toContain(card1);
+        expect(gameState.graveyardPile).toContain(card2);
+    });
+});
+
 describe('complex scenarios', () => {
     test('chain plays: 10 followed by another 10', () => {
         const ten1 = { suit: 'hearts', value: '10', numericValue: 10 };
