@@ -115,26 +115,36 @@ io.on('connection', (socket) => {
             return;
         }
         
-        let card;
-        if (data.cardType === 'hand') {
-            card = player.hand[data.cardIndex];
-        } else if (data.cardType === 'faceUp') {
-            card = player.faceUpCards[data.cardIndex];
-        }
+        // Use default 'hand' if not provided
+        const cardType = data.cardType || 'hand';
+        const cardIndex = data.cardIndex;
         
-        if (!card) {
-            socket.emit('error', 'Card not found');
+        if (cardIndex === undefined || cardIndex === null) {
+            socket.emit('error', 'Card index not provided');
             return;
         }
-        
+
         // Attempt to play the card
-        changeGameState.gameInProgress.prePlayCard(player, card);
+        const result = changeGameState.gameInProgress.prePlayCard(player, cardIndex, cardType);
+
+        if (result && result.error) {
+            socket.emit('playError', result.error);
+            return;
+        }
+
+        if (result && result.blindPlayFailed) {
+            socket.emit('playMessage', 'Blind play failed. Picked up the pile.');
+        }
         
         // Broadcast updated game state to all players
         broadcastGameState();
         
-        // Notify about turn changes
-        notifyTurns();
+        if (result && result.gameOver) {
+            io.emit('gameOver', { winner: result.winner });
+        } else {
+            // Notify about turn changes
+            notifyTurns();
+        }
     });
 
     socket.on('drawCard', () => {
@@ -156,6 +166,31 @@ io.on('connection', (socket) => {
         } else {
             socket.emit('error', 'Draw pile is empty');
         }
+    });
+
+    socket.on('pickUpPile', () => {
+        console.debug(`Player ${socket.id} wants to pick up the pile`);
+
+        const player = gameState.players.find(p => p.socketId === socket.id);
+        if (!player) {
+            socket.emit('error', 'Player not found');
+            return;
+        }
+
+        const result = changeGameState.gameInProgress.pickUpPile(player);
+
+        if (result && result.error) {
+            socket.emit('playError', result.error);
+            return;
+        }
+
+        socket.emit('playMessage', 'You picked up the pile.');
+
+        // Broadcast updated game state to all players
+        broadcastGameState();
+
+        // Notify about turn changes
+        notifyTurns();
     });
 });
 

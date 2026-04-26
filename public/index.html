@@ -18,13 +18,21 @@
     
     <div id="gameContainer" style="display: none;">
         <div id="turnIndicator"></div>
+        <div id="errorMessage" style="color: red; font-weight: bold; margin: 10px 0; min-height: 20px;"></div>
         <div id="gameState"></div>
         <pre id="gameArea"></pre>
-        <div id="handCards"></div>
+        <div id="faceDownCards"></div>
         <div id="faceUpCards"></div>
+        <div id="handCards"></div>
         <div id="actions">
             <button id="drawCardButton" style="display: none;">Draw Card</button>
+            <button id="pickUpPileButton" style="display: none;">Pick Up Pile</button>
         </div>
+    </div>
+
+    <div id="gameOverContainer" style="display: none;">
+        <h2>Game Over!</h2>
+        <div id="winnerText"></div>
     </div>
 </body>
 </html>
