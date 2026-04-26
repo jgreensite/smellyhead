@@ -18,13 +18,33 @@
     
     <div id="gameContainer" style="display: none;">
         <div id="turnIndicator"></div>
+        <div id="errorMessage" style="color: red; font-weight: bold; margin: 10px 0; min-height: 20px;"></div>
         <div id="gameState"></div>
         <pre id="gameArea"></pre>
-        <div id="handCards"></div>
+        <div id="faceDownCards"></div>
         <div id="faceUpCards"></div>
+        <div id="handCards"></div>
         <div id="actions">
             <button id="drawCardButton" style="display: none;">Draw Card</button>
+            <button id="pickUpPileButton" style="display: none;">Pick Up Pile</button>
+            <button id="readyButton" style="display: none;">Ready (Finish Swapping)</button>
+            <button id="playSelectedButton" style="display: none;">Play Selected</button>
         </div>
+    </div>
+
+    <div id="suitSelectionOverlay" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 2px solid black; z-index: 1000;">
+        <h3>Select a suit for the Joker:</h3>
+        <button class="suitButton" data-suit="hearts">Hearts</button>
+        <button class="suitButton" data-suit="diamonds">Diamonds</button>
+        <button class="suitButton" data-suit="clubs">Clubs</button>
+        <button class="suitButton" data-suit="spades">Spades</button>
+        <button id="cancelSuitSelection">Cancel</button>
+    </div>
+
+    <div id="gameOverContainer" style="display: none;">
+        <h2>Game Over!</h2>
+        <div id="winnerText"></div>
+        <button id="playAgainButton" style="margin-top: 20px;">Play Again</button>
     </div>
 </body>
 </html>

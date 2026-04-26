@@ -1,4 +1,5 @@
 const { gameState } = require('./gameState');
+const gameConfig = require('./gameConfig');
 
 function getTopCard() {
     return gameState.discardPile[gameState.discardPile.length - 1];
@@ -18,6 +19,12 @@ const gameRules = {
         let topCard = getTopCard();
         // If the discard pile is empty, any card can be played
         if (!topCard) {
+            return true;
+        }
+
+        // Check if card has a config property that allows it to bypass rules
+        const cardConfig = gameConfig.specialCards[card.value];
+        if (cardConfig && cardConfig.canPlayOnAnything) {
             return true;
         }
 

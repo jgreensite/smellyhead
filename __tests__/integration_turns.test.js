@@ -45,10 +45,19 @@ describe('integration: multi-player turns (isolated server)', () => {
       socket.on('startGame', () => {
         const oldState = gameState.currentState;
         changeGameState.waitingForPlayers.startGame(socket.id);
-        if (oldState !== gameState.currentState && gameState.currentState === 'gameInProgress') {
-          gameState.players.forEach(p => io.to(p.socketId).emit('gameStarted', getPlayerGameState(p.socketId)));
-          notifyTurns();
+        if (oldState !== gameState.currentState && gameState.currentState === 'setupGame') {
+          gameState.players.forEach(p => io.to(p.socketId).emit('setupStarted', getPlayerGameState(p.socketId)));
         }
+      });
+
+      socket.on('setReady', () => {
+          const player = gameState.players.find(p => p.socketId === socket.id);
+          if (!player) return;
+          const result = changeGameState.setupGame.setReady(player);
+          if (result.allReady) {
+              gameState.players.forEach(p => io.to(p.socketId).emit('gameStarted', getPlayerGameState(p.socketId)));
+              notifyTurns();
+          }
       });
 
       socket.on('drawCard', () => {
@@ -98,6 +107,9 @@ describe('integration: multi-player turns (isolated server)', () => {
           // Give the server a short moment to process addPlayer events, then start the game
           setTimeout(() => p1.emit('startGame'), 250);
         }
+      });
+      c.on('setupStarted', () => {
+          c.emit('setReady');
       });
     });
 
