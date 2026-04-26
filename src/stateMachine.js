@@ -1,4 +1,4 @@
-const { gameState } = require('./gameState');
+const { gameState, clearDiscardPile } = require('./gameState');
 const gameRules = require('./gameRules');
 const Deck = require('./deck');
 const Player = require('./player');
@@ -140,12 +140,6 @@ const changeGameState = {
         }
     }
 };
-
-function clearDiscardPile() {
-    if (!gameState.discardPile || gameState.discardPile.length === 0) return;
-    gameState.graveyardPile.push(...gameState.discardPile);
-    gameState.discardPile = [];
-}
 
 function isValidTransition(currentState, newState) {
     const validTransitions = {

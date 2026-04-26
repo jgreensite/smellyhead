@@ -50,6 +50,15 @@ class Game {
         if (!currentPlayer) return false;
         return currentPlayer.socketId === socketId;
     }
+
+    /**
+     * Move all cards from the discard pile to the graveyard pile.
+     */
+    clearDiscardPile() {
+        if (!this.discardPile || this.discardPile.length === 0) return;
+        this.graveyardPile.push(...this.discardPile);
+        this.discardPile = [];
+    }
 }
 
 function createGame() {
@@ -59,4 +68,8 @@ function createGame() {
 // Create default singleton for backward compatibility
 const gameState = new Game();
 
-module.exports = { createGame, gameState };
+function clearDiscardPile() {
+    gameState.clearDiscardPile();
+}
+
+module.exports = { createGame, gameState, clearDiscardPile };
